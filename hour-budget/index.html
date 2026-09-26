@@ -526,7 +526,7 @@ function render(){
   $("list").innerHTML = html;
 }
 
-let t3Editing = false;
+let t3Editing = false, t3Key = null, entryKey = null;
 function renderTop3(){
   const k = dayKey(Date.now()), list = (state.days[k] && state.days[k].top3) || [];
   $("t3Edit").hidden = !t3Editing; $("t3View").hidden = t3Editing;
@@ -539,7 +539,7 @@ function renderTop3(){
 function openTop3(){
   const k = dayKey(Date.now()), list = (state.days[k] && state.days[k].top3) || [];
   ["t3a","t3b","t3c"].forEach((id,i)=>{ $(id).value = list[i] ? list[i].text : ""; });
-  t3Editing = true; renderTop3(); $("t3a").focus();
+  t3Key = k; t3Editing = true; renderTop3(); $("t3a").focus();
 }
 $("top3").addEventListener("click", ev=>{
   if (ev.target.closest("#t3Start") || ev.target.closest("#t3EditBtn")) return openTop3();
@@ -551,7 +551,7 @@ $("top3").addEventListener("change", ev=>{
 });
 $("t3Cancel").onclick = ()=>{ t3Editing = false; renderTop3(); };
 $("t3Save").onclick = ()=>{
-  const k = dayKey(Date.now()), old = (state.days[k] && state.days[k].top3) || [];
+  const k = t3Key || dayKey(Date.now()), old = (state.days[k] && state.days[k].top3) || [];
   const items = ["t3a","t3b","t3c"].map(id=>$(id).value.trim()).filter(Boolean)
     .map(text=>{ const prev = old.find(o=>o.text===text); return {text, done: prev ? prev.done : false}; });
   const d = state.days[k] || {};
@@ -768,6 +768,20 @@ setInterval(()=>{
   document.title = "● " + t + " · " + r.name;
   if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && $("rateScrim").hidden) render();
 },1000);
+/* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
+let shownDay = dayKey(Date.now());
+function checkNewDay(){
+  const k = dayKey(Date.now());
+  if (k === shownDay) return;
+  shownDay = k;
+  if (!t3Editing && $("entryEdit").hidden) render();
+}
+function scheduleMidnight(){
+  const n = new Date(); const next = new Date(n.getFullYear(), n.getMonth(), n.getDate()+1, 0, 0, 2);
+  setTimeout(()=>{ checkNewDay(); scheduleMidnight(); }, next - n);
+}
+scheduleMidnight();
+setInterval(checkNewDay, 30000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden){ state = load(); render(); wake(); nextRating(); } });
 
 /* ---------- wake lock ---------- */
@@ -891,13 +905,14 @@ function saveDay(k, text){
 }
 $("homeView").addEventListener("click", ev=>{
   const b = ev.target.closest("[data-entry]"); if (!b) return;
-  const e = state.days[b.dataset.entry];
-  $("entryText").value = e ? e.note : "";
+  entryKey = b.dataset.entry;
+  const e = state.days[entryKey];
+  $("entryText").value = e && e.note ? e.note : "";
   $("entryView").hidden = true; $("entryEdit").hidden = false; $("entryText").focus();
 });
 function closeEntry(){ $("entryEdit").hidden = true; $("entryView").hidden = false; }
 $("entryCancel").onclick = ()=>{ closeEntry(); render(); };
-$("entrySave").onclick = ()=>{ saveDay(dayKey(Date.now()), $("entryText").value); closeEntry(); render(); };
+$("entrySave").onclick = ()=>{ saveDay(entryKey || dayKey(Date.now()), $("entryText").value); entryKey = null; closeEntry(); render(); };
 
 /* ---------- name ---------- */
 function setName(n){ state.settings.name = n.trim(); persist(); render(); }
