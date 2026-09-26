@@ -98,6 +98,22 @@ input.num{width:72px;font-family:var(--mono)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);z-index:10}
 .install{background:var(--accent-soft);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;font-size:14px}
 @media (prefers-reduced-motion: reduce){.bar i{transition:none}}
+.folder{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;align-items:center;gap:14px;width:100%;text-align:left;min-height:0}
+.folder:hover{border-color:var(--accent)}
+.folder .ficon{width:42px;height:42px;border-radius:11px;background:var(--accent-soft);display:grid;place-items:center;flex:none}
+.folder .ficon svg{width:22px;height:22px;fill:none;stroke:var(--accent);stroke-width:2}
+.folder .fbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.folder .fname{font-family:var(--display);font-weight:500;font-size:18px;overflow-wrap:anywhere}
+.folder .fmeta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.folder .frun{font-family:var(--mono);font-size:13px;color:var(--run);font-variant-numeric:tabular-nums}
+.folder.hasrun{border-color:var(--run);box-shadow:0 0 0 3px var(--run-soft)}
+.folder .chev{color:var(--muted);font-size:22px;flex:none}
+.crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.crumb h2{font-family:var(--display);font-weight:700;font-size:24px;margin:0;flex:1;min-width:0;overflow-wrap:anywhere}
+.section-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:4px 0 -4px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow .primary{flex:1}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;width:100%}
 </style>
 </head>
 <body>
@@ -130,7 +146,32 @@ input.num{width:72px;font-family:var(--mono)}
     </div>
   </section>
 
-  <button id="addBtn" class="primary" type="button">+ New goal</button>
+  <!-- folder header (only inside a folder) -->
+  <div class="crumb" id="crumb" hidden>
+    <button type="button" class="ghost" id="backBtn" aria-label="Back to all">‹ All</button>
+    <h2 id="folderTitle"></h2>
+    <button type="button" class="ghost" id="folderEditBtn">Rename / delete</button>
+  </div>
+  <p class="note" id="folderStats" hidden></p>
+
+  <section class="sheet" id="folderForm" hidden>
+    <h2 id="folderFormTitle">New folder</h2>
+    <label class="field"><span>Folder name</span><input id="folderName" maxlength="60" placeholder="Maths" autocomplete="off"></label>
+    <div class="row">
+      <button type="button" class="primary" id="folderSave">Save folder</button>
+      <button type="button" class="ghost" id="folderCancel">Cancel</button>
+    </div>
+    <div class="row" id="folderDeleteRow" hidden>
+      <button type="button" class="ghost" id="folderDelete">Delete folder…</button>
+      <span class="note" id="folderDeleteNote" hidden>Its goals stay and move to the main list.</span>
+      <button type="button" class="danger" id="folderDeleteYes" hidden>Delete folder</button>
+    </div>
+  </section>
+
+  <div class="btnrow" id="addRow">
+    <button id="addBtn" class="primary" type="button">+ New goal</button>
+    <button id="addFolderBtn" type="button">+ New folder</button>
+  </div>
 
   <form class="sheet" id="form" hidden novalidate>
     <h2 id="formTitle">New goal</h2>
@@ -140,6 +181,8 @@ input.num{width:72px;font-family:var(--mono)}
       <button type="button" data-t="Reading|up|">Reading · tally</button>
     </div>
     <label class="field"><span>Name</span><input id="fName" maxlength="80" placeholder="Analysis 1" autocomplete="off"></label>
+    <label class="field"><span>Folder</span><select id="fFolder"></select></label>
+    <label class="field" id="fNewFolderWrap" hidden><span>New folder name</span><input id="fNewFolder" maxlength="60" placeholder="Maths" autocomplete="off"></label>
     <div class="field"><span>Direction</span>
       <div class="seg" role="group" aria-label="Direction">
         <button type="button" id="mDown" aria-pressed="true">Count down</button>
@@ -164,19 +207,40 @@ input.num{width:72px;font-family:var(--mono)}
 (function(){
 const H = 3600000, DAY = 86400000, KEY = "hourbudget.v1";
 const $ = id => document.getElementById(id);
-let state = load();           // {goals:{id:{...}}}
-let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null;
+const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+let state = load();
+let current = folderFromHash();   // null = home, else folder id
+let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
 
 /* ---------- storage ---------- */
 function load(){
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.goals) return s; } catch(e){}
-  return {goals:{}};
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.goals){ s.folders = s.folders || {}; return s; } } catch(e){}
+  return {goals:{}, folders:{}};
 }
 function persist(){
   try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
   catch(e){ toast("Couldn't save on this device. Free up storage and try again."); return false; }
 }
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+/* ---------- navigation ---------- */
+function folderFromHash(){
+  const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
+  return m ? m[1] : null;
+}
+function go(fid){
+  if (fid) location.hash = "f-" + fid;
+  else history.replaceState(null, "", location.pathname + location.search), onNav();
+}
+function onNav(){
+  current = folderFromHash();
+  if (current && !state.folders[current]) current = null;
+  openPanel = null; confirmDelete = null;
+  closeForm(); closeFolderForm();
+  render(); window.scrollTo(0,0);
+}
+window.addEventListener("hashchange", onNav);
 
 /* ---------- formatting ---------- */
 function hm(ms){
@@ -200,22 +264,70 @@ function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
 
 /* ---------- derived ---------- */
-function list(){ return Object.entries(state.goals).map(([id,g])=>({id,...g})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); }
+function goalsIn(fid){
+  return Object.entries(state.goals).map(([id,g])=>({id,...g}))
+    .filter(g => fid ? g.folderId===fid : !(g.folderId && state.folders[g.folderId]))
+    .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+}
+function allGoals(){ return Object.entries(state.goals).map(([id,g])=>({id,...g})); }
+function folders(){ return Object.entries(state.folders).map(([id,f])=>({id,...f})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); }
 function doneNow(g){ return (g.doneMs||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
+function weekOf(goals){
+  const now = Date.now(); let w = 0;
+  goals.forEach(g=>{ (g.log||[]).forEach(e=>{ if(now-e.at<7*DAY) w+=e.ms; }); if(g.runningSince) w+=now-g.runningSince; });
+  return Math.max(0,w);
+}
 
 /* ---------- render ---------- */
 function render(){
-  const goals = list(), now = Date.now();
-  let week = 0;
-  goals.forEach(g=>{ (g.log||[]).forEach(e=>{ if(now-e.at<7*DAY) week+=e.ms; }); if(g.runningSince) week+=now-g.runningSince; });
-  $("weekTotal").textContent = hm(Math.max(0,week));
-  const running = goals.find(g=>g.runningSince);
-  document.title = running ? "● " + clock(now-running.runningSince) + " · " + running.name : "Hour Budget";
-  if (!goals.length){
-    $("list").innerHTML = `<div class="empty"><h2>Give your time a budget</h2><p>Create a goal like “Analysis 1 · 100 hours”, start the timer while you work, and watch the hours count down.</p></div>`;
+  $("weekTotal").textContent = hm(weekOf(allGoals()));
+  const running = allGoals().find(g=>g.runningSince);
+  document.title = running ? "● " + clock(Date.now()-running.runningSince) + " · " + running.name : "Hour Budget";
+
+  const inFolder = !!current;
+  $("crumb").hidden = !inFolder; $("folderStats").hidden = !inFolder;
+  $("addFolderBtn").hidden = inFolder;
+  $("addBtn").textContent = inFolder ? "+ New goal in " + state.folders[current].name : "+ New goal";
+
+  if (inFolder){
+    const gs = goalsIn(current);
+    $("folderTitle").textContent = state.folders[current].name;
+    const total = gs.reduce((s,g)=>s+doneNow(g),0);
+    $("folderStats").textContent = gs.length + (gs.length===1?" goal":" goals") + " · " + hm(total) + " logged · " + hm(weekOf(gs)) + " in the last 7 days";
+    $("list").innerHTML = gs.length ? gs.map(cardHTML).join("")
+      : `<div class="empty"><h2>This folder is empty</h2><p>Tap “New goal” to add the first goal to ${esc(state.folders[current].name)}.</p></div>`;
     return;
   }
-  $("list").innerHTML = goals.map(cardHTML).join("");
+
+  const fs = folders(), loose = goalsIn(null);
+  if (!fs.length && !loose.length){
+    $("list").innerHTML = `<div class="empty"><h2>Give your time a budget</h2><p>Make folders like “Maths” or “Piano”, put goals inside like “Analysis 1 · 100 hours”, and start the timer while you work.</p></div>`;
+    return;
+  }
+  let html = "";
+  if (fs.length){
+    html += `<p class="section-lbl">Folders</p>` + fs.map(folderHTML).join("");
+  }
+  if (loose.length){
+    if (fs.length) html += `<p class="section-lbl">Other goals</p>`;
+    html += loose.map(cardHTML).join("");
+  }
+  $("list").innerHTML = html;
+}
+
+function folderHTML(f){
+  const gs = goalsIn(f.id);
+  const total = gs.reduce((s,g)=>s+doneNow(g),0);
+  const run = gs.find(g=>g.runningSince);
+  return `<button type="button" class="folder${run?" hasrun":""}" data-folder="${f.id}">
+    <span class="ficon">${FOLDER_SVG}</span>
+    <span class="fbody">
+      <span class="fname">${esc(f.name)}</span>
+      <span class="fmeta">${gs.length} ${gs.length===1?"goal":"goals"} · ${hm(total)} logged</span>
+      ${run?`<span class="frun" data-frun="${f.id}">● ${esc(run.name)} · ${clock(Date.now()-run.runningSince)}</span>`:""}
+    </span>
+    <span class="chev" aria-hidden="true">›</span>
+  </button>`;
 }
 
 function cardHTML(g){
@@ -255,25 +367,26 @@ function cardHTML(g){
         <input class="num" id="m-${g.id}" type="number" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="minutes"><span class="note">min</span></div>
       <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Remove time</button></div>
       ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${when(e.at)}${e.src==="manual"?" · manual":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)}</b></li>`).join("")}</ul></div>`:""}
-      <div class="row"><button type="button" class="ghost" data-act="edit">Edit goal</button>
+      <div class="row"><button type="button" class="ghost" data-act="edit">Edit / move</button>
         ${confirmDelete===g.id?`<button type="button" class="danger" data-act="delete-yes">Delete for good</button><button type="button" class="ghost" data-act="delete-no">Keep</button>`:`<button type="button" class="ghost" data-act="delete">Delete…</button>`}</div>
     </div>`:""}
   </article>`;
 }
 
 setInterval(()=>{
-  const r = list().find(g=>g.runningSince); if (!r) return;
-  const el = document.querySelector(`[data-live="${r.id}"]`);
-  if (el) el.textContent = "● " + clock(Date.now()-r.runningSince);
-  document.title = "● " + clock(Date.now()-r.runningSince) + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel) render();
+  const r = allGoals().find(g=>g.runningSince); if (!r) return;
+  const t = clock(Date.now()-r.runningSince);
+  const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = "● " + t;
+  if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
+  document.title = "● " + t + " · " + r.name;
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden) render();
 },1000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ state = load(); render(); wake(); } });
 
 /* ---------- wake lock while timing ---------- */
 let lock = null;
 async function wake(){
-  const running = list().some(g=>g.runningSince);
+  const running = allGoals().some(g=>g.runningSince);
   try{
     if (running && !lock && "wakeLock" in navigator){ lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release",()=>lock=null); }
     else if (!running && lock){ await lock.release(); lock = null; }
@@ -290,6 +403,8 @@ function stopGoal(id){
   return ms;
 }
 $("list").addEventListener("click", ev=>{
+  const fb = ev.target.closest("button[data-folder]");
+  if (fb){ go(fb.dataset.folder); return; }
   const btn = ev.target.closest("button[data-act]"); if(!btn) return;
   const id = btn.closest(".goal").dataset.id, g = state.goals[id]; if(!g) return;
   const act = btn.dataset.act;
@@ -316,7 +431,7 @@ $("list").addEventListener("click", ev=>{
   persist(); render(); wake();
 });
 
-/* ---------- form ---------- */
+/* ---------- goal form ---------- */
 function setMode(m){
   formMode = m;
   $("mDown").setAttribute("aria-pressed", m==="down"); $("mUp").setAttribute("aria-pressed", m==="up");
@@ -327,33 +442,83 @@ $("chips").addEventListener("click",ev=>{
   const b = ev.target.closest("button[data-t]"); if(!b) return;
   const [n,m,h] = b.dataset.t.split("|"); $("fName").value=n; setMode(m); $("fHours").value=h; $("fName").select();
 });
+function fillFolderSelect(selected){
+  const opts = [`<option value="">No folder</option>`]
+    .concat(folders().map(f=>`<option value="${f.id}">${esc(f.name)}</option>`))
+    .concat([`<option value="__new">+ New folder…</option>`]);
+  $("fFolder").innerHTML = opts.join("");
+  $("fFolder").value = selected && state.folders[selected] ? selected : "";
+  $("fNewFolderWrap").hidden = true; $("fNewFolder").value = "";
+}
+$("fFolder").onchange=()=>{ const n = $("fFolder").value==="__new"; $("fNewFolderWrap").hidden=!n; if(n) $("fNewFolder").focus(); };
 function openForm(id){
   const g = id ? state.goals[id] : null; editingId = id || null;
+  closeFolderForm();
   $("formTitle").textContent = g ? "Edit goal" : "New goal";
   $("saveBtn").textContent = g ? "Save changes" : "Save goal";
   $("chips").hidden = !!g;
   $("fName").value = g ? g.name : ""; $("fHours").value = g && g.targetH ? g.targetH : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
+  fillFolderSelect(g ? g.folderId : current);
   setMode(g ? g.mode : "down");
-  $("form").hidden=false; $("addBtn").hidden=true; $("menu").hidden=true;
+  $("form").hidden=false; $("addRow").hidden=true; $("menu").hidden=true;
   $("form").scrollIntoView({behavior:"smooth",block:"start"});
 }
-function closeForm(){ $("form").hidden=true; $("addBtn").hidden=false; editingId=null; }
+function closeForm(){ $("form").hidden=true; $("addRow").hidden=false; editingId=null; }
 $("addBtn").onclick=()=>openForm(null); $("cancelBtn").onclick=closeForm;
 $("form").addEventListener("submit",ev=>{
   ev.preventDefault();
   const name = $("fName").value.trim(), hrs = parseFloat($("fHours").value);
   if (!name) return toast("Give the goal a name.");
   if (formMode==="down" && !(hrs>0)) return toast("A countdown needs an hour budget.");
-  const id = editingId || ("g"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+  let folderId = $("fFolder").value || null;
+  if (folderId==="__new"){
+    const fname = $("fNewFolder").value.trim();
+    if (!fname) return toast("Name the new folder.");
+    folderId = newId("f"); state.folders[folderId] = {name:fname, createdAt:Date.now()};
+  }
+  const id = editingId || newId("g");
   const base = state.goals[id] || {doneMs:0,runningSince:null,log:[],createdAt:Date.now()};
-  state.goals[id] = {...base, name, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null};
-  if (persist()){ toast(editingId?"Goal updated":"Goal added"); closeForm(); render(); }
+  state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null};
+  const moved = editingId && base.folderId !== folderId;
+  if (persist()){
+    toast(editingId ? (moved ? "Goal moved" : "Goal updated") : "Goal added");
+    closeForm();
+    if (!editingId && folderId && folderId!==current) go(folderId); else render();
+  }
 });
+
+/* ---------- folders ---------- */
+function openFolderForm(fid){
+  editingFolder = fid || null; closeForm();
+  $("folderFormTitle").textContent = fid ? "Rename folder" : "New folder";
+  $("folderSave").textContent = fid ? "Save name" : "Create folder";
+  $("folderName").value = fid ? state.folders[fid].name : "";
+  $("folderDeleteRow").hidden = !fid; $("folderDelete").hidden = false; $("folderDeleteYes").hidden = true; $("folderDeleteNote").hidden = true;
+  $("folderForm").hidden = false; $("addRow").hidden = true; $("menu").hidden = true;
+  $("folderName").focus();
+}
+function closeFolderForm(){ $("folderForm").hidden = true; $("addRow").hidden = false; editingFolder = null; }
+$("addFolderBtn").onclick=()=>openFolderForm(null);
+$("folderEditBtn").onclick=()=>openFolderForm(current);
+$("folderCancel").onclick=closeFolderForm;
+$("folderSave").onclick=()=>{
+  const name = $("folderName").value.trim(); if(!name) return toast("Give the folder a name.");
+  if (editingFolder){ state.folders[editingFolder].name = name; persist(); toast("Folder renamed"); closeFolderForm(); render(); }
+  else { const id = newId("f"); state.folders[id] = {name, createdAt:Date.now()}; persist(); toast("Folder created"); closeFolderForm(); go(id); }
+};
+$("folderName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("folderSave").click(); } });
+$("folderDelete").onclick=()=>{ $("folderDelete").hidden=true; $("folderDeleteYes").hidden=false; $("folderDeleteNote").hidden=false; };
+$("folderDeleteYes").onclick=()=>{
+  const fid = editingFolder;
+  Object.values(state.goals).forEach(g=>{ if(g.folderId===fid) g.folderId=null; });
+  delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go(null);
+};
+$("backBtn").onclick=()=>{ if (history.length>1 && folderFromHash()) history.back(); else go(null); };
 
 /* ---------- backup ---------- */
 $("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); };
 $("exportBtn").onclick=()=>{
-  const blob = new Blob([JSON.stringify({app:"hour-budget",version:1,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
+  const blob = new Blob([JSON.stringify({app:"hour-budget",version:2,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = "hour-budget-backup-" + new Date().toISOString().slice(0,10) + ".json";
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
@@ -365,12 +530,12 @@ $("importFile").onchange=async ev=>{
   try{
     const data = JSON.parse(await f.text());
     if (!data || typeof data.goals!=="object") throw 0;
-    pendingImport = {goals:data.goals};
-    $("importText").textContent = "This backup has " + Object.keys(data.goals).length + " goals. Restoring replaces what's on this phone.";
+    pendingImport = {goals:data.goals, folders:data.folders||{}};
+    $("importText").textContent = "This backup has " + Object.keys(data.goals).length + " goals and " + Object.keys(pendingImport.folders).length + " folders. Restoring replaces what's on this phone.";
     $("importConfirm").hidden=false;
   }catch(e){ toast("That file isn't an Hour Budget backup."); }
 };
-$("importYes").onclick=()=>{ state=pendingImport; pendingImport=null; $("importConfirm").hidden=true; persist(); render(); toast("Backup restored"); };
+$("importYes").onclick=()=>{ state=pendingImport; pendingImport=null; $("importConfirm").hidden=true; persist(); go(null); render(); toast("Backup restored"); };
 $("importNo").onclick=()=>{ pendingImport=null; $("importConfirm").hidden=true; };
 
 /* ---------- install ---------- */
@@ -380,6 +545,7 @@ $("installBtn").onclick=async()=>{ if(!deferred) return; deferred.prompt(); awai
 window.addEventListener("appinstalled",()=>{ $("installBar").hidden=true; });
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
+if (current && !state.folders[current]) current = null;
 render(); wake();
 })();
 </script>
