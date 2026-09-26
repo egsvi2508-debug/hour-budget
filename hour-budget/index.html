@@ -257,7 +257,6 @@ details.sitem summary .sval{white-space:nowrap}
         <span id="runText"></span>
         <button type="button" class="dp-stop" id="runStop">Stop</button>
       </div>
-      <div class="dp-week" id="weekLine"></div>
     </div>
 
     <button type="button" class="bigbtn" id="goalsBtn">
@@ -522,11 +521,6 @@ function renderToday(){
   $("runRow").hidden = !r;
   if (r){ $("runText").textContent = "● " + r.name + " · " + clock(Date.now()-r.runningSince); $("runStop").dataset.id = r.id; }
   $("nameAsk").hidden = !!(state.settings.name||"").trim();
-  const week = sumSince(Date.now()-7*DAY);
-  const pct = week / (7*WAKE_H*H) * 100;
-  $("weekLine").textContent = week
-    ? "Last 7 days: " + hm(week) + ", " + (pct<1 ? "under 1%" : Math.round(pct) + "%") + " of your waking hours."
-    : "Last 7 days: nothing logged yet.";
   if ($("entryEdit").hidden){
     const e = state.days[dayKey(Date.now())];
     $("entryView").innerHTML = e && e.note
