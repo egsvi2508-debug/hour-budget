@@ -114,6 +114,28 @@ input.num{width:72px;font-family:var(--mono)}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .primary{flex:1}
 select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;width:100%}
+/* opening page */
+.home{display:flex;flex-direction:column;gap:18px}
+.daypanel{background:var(--accent);color:var(--accent-ink);border-radius:22px;padding:22px 22px 18px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
+.daypanel::after{content:"";position:absolute;right:-50px;top:-50px;width:180px;height:180px;border-radius:50%;border:22px solid currentColor;opacity:.08;pointer-events:none}
+.dp-label{font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.75}
+.dp-big{font-family:var(--mono);font-size:48px;font-weight:500;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.dp-meta{font-size:14px;opacity:.85;font-variant-numeric:tabular-nums}
+.dp-run{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px 8px 8px 12px;margin-top:6px;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
+.dp-stop{background:var(--run);border-color:var(--run);color:#fff;min-height:36px;padding:6px 14px;font-weight:600}
+.dp-week{font-size:14px;opacity:.85;border-top:1px solid color-mix(in srgb, currentColor 25%, transparent);padding-top:10px;margin-top:6px}
+.bigbtn{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:104px;padding:20px 22px;border-radius:22px;background:var(--surface);border:1.5px solid var(--ink);text-align:left}
+.bigbtn:active{transform:scale(.99)}
+.bb-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bb-title{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.1}
+.bb-sub{font-size:14px;color:var(--muted)}
+.bb-arrow{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:24px}
+.homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
+.rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
+.rowlink svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
+.rowlink .rl-text{font-weight:600}
+.rowlink .rl-sub{flex:1;font-size:13px;color:var(--muted);text-align:right}
+.rowlink .chev,.bigbtn .chev{color:var(--muted);font-size:20px}
 header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 12px}
 .hello{display:contents}
 .hello .eyebrow{grid-column:1;grid-row:1}
@@ -164,13 +186,12 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
 </head>
 <body>
 <div class="wrap">
-  <header>
+  <header id="homeHeader">
     <div class="hello">
       <span class="eyebrow" id="dateLine"></span>
       <h1 id="greeting">Hello</h1>
     </div>
     <div class="hright">
-      <button type="button" class="navbtn" id="journalBtn" aria-label="Open journal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>Journal</button>
       <button type="button" class="iconbtn ghost" id="menuBtn" aria-label="Settings and backup" aria-expanded="false">⋯</button>
     </div>
   </header>
@@ -207,34 +228,50 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
     </div>
   </section>
 
-  <!-- today (home only) -->
-  <section class="today" id="todayCard">
-    <div class="trow">
-      <div>
-        <div class="eyebrow">Today</div>
-        <div class="tbig" id="todayTotal">0h 00m</div>
+  <!-- opening page -->
+  <section class="home" id="homeView">
+    <div class="daypanel" id="todayCard">
+      <div class="dp-label">Today</div>
+      <div class="dp-big" id="todayTotal">0h 00m</div>
+      <div class="dp-meta" id="todayMeta"></div>
+      <div class="dp-run" id="runRow" hidden>
+        <span id="runText"></span>
+        <button type="button" class="dp-stop" id="runStop">Stop</button>
       </div>
-      <div class="tmeta" id="todayMeta"></div>
+      <div class="dp-week" id="weekLine"></div>
     </div>
-    <div id="nameAsk" class="row" hidden>
-      <label for="nameFirst" class="note">What should I call you?</label>
-      <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
-      <button type="button" id="nameFirstSave">Save</button>
-    </div>
-    <div id="entryView"></div>
-    <div id="entryEdit" hidden>
-      <textarea id="entryText" maxlength="4000" placeholder="What did you do today? How did it go?"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button type="button" class="primary" id="entrySave" style="flex:0;min-width:120px">Save</button>
-        <button type="button" class="ghost" id="entryCancel">Cancel</button>
+
+    <button type="button" class="bigbtn" id="goalsBtn">
+      <span class="bb-text"><span class="bb-title">My goals</span><span class="bb-sub" id="goalsSub"></span></span>
+      <span class="bb-arrow" aria-hidden="true">→</span>
+    </button>
+
+    <div class="homenote">
+      <div id="nameAsk" class="row" hidden>
+        <label for="nameFirst" class="note">What should I call you?</label>
+        <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
+        <button type="button" id="nameFirstSave">Save</button>
+      </div>
+      <div class="eyebrow">Today's entry</div>
+      <div id="entryView"></div>
+      <div id="entryEdit" hidden>
+        <textarea id="entryText" maxlength="4000" placeholder="What did you do today? How did it go?"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="primary" id="entrySave" style="flex:0;min-width:120px">Save</button>
+          <button type="button" class="ghost" id="entryCancel">Cancel</button>
+        </div>
       </div>
     </div>
-    <div class="week-line" id="weekLine"></div>
+
+    <button type="button" class="rowlink" id="journalBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
+      <span class="rl-text">Journal</span><span class="rl-sub" id="journalSub"></span><span class="chev" aria-hidden="true">›</span>
+    </button>
   </section>
 
   <!-- sub-page header -->
   <div class="crumb" id="crumb" hidden>
-    <button type="button" class="ghost" id="backBtn" aria-label="Back to all">‹ All</button>
+    <button type="button" class="ghost" id="backBtn" aria-label="Back">‹ Back</button>
     <h2 id="folderTitle"></h2>
     <button type="button" class="ghost" id="folderEditBtn">Rename / delete</button>
   </div>
@@ -346,6 +383,7 @@ function newId(p){ return p + Date.now().toString(36) + Math.random().toString(3
 /* ---------- navigation ---------- */
 function parseHash(){
   if (location.hash === "#journal") return {view:"journal"};
+  if (location.hash === "#goals") return {view:"goals"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
   return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
@@ -413,15 +451,16 @@ function render(){
   const r = running();
   document.title = r ? "● " + clock(Date.now()-r.runningSince) + " · " + r.name : "Hour Budget";
 
-  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal";
-  $("todayCard").hidden = !home;
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals";
+  $("homeView").hidden = !home; $("homeHeader").hidden = !home;
+  if (!home){ $("menu").hidden = true; }
   $("crumb").hidden = home; $("folderStats").hidden = home;
   $("folderEditBtn").hidden = !folder;
-  $("addRow").hidden = journal || !$("form").hidden || !$("folderForm").hidden;
-  $("addFolderBtn").hidden = !home;
-  $("journalBtn").hidden = journal;
+  $("addRow").hidden = home || journal || !$("form").hidden || !$("folderForm").hidden;
+  $("addFolderBtn").hidden = !goalsView;
+  $("backBtn").textContent = folder ? "‹ My goals" : "‹ Home";
 
-  if (home) renderToday();
+  if (home){ renderToday(); $("list").innerHTML = ""; return; }
   if (journal) return renderJournal();
 
   if (folder){
@@ -437,7 +476,10 @@ function render(){
   }
 
   $("addBtn").textContent = "+ New goal";
+  $("folderTitle").textContent = "My goals";
   const fs = folders(), loose = goalsIn(null);
+  const tot = allGoals().reduce((a,g)=>a+doneNow(g),0);
+  $("folderStats").textContent = allGoals().length ? allGoals().length + (allGoals().length===1?" goal":" goals") + " · " + hm(tot) + " logged in total" : "";
   if (!fs.length && !loose.length){
     $("list").innerHTML = `<div class="empty"><h2>Give your time a budget</h2><p>Make folders like “Maths” or “Piano”, put goals inside like “Analysis 1 · 100 hours”, and start the timer while you work.</p></div>`;
     return;
@@ -455,7 +497,14 @@ function renderToday(){
   $("todayTotal").textContent = hm(total);
   const avg = weightedAvg(today);
   const n = today.length + (running() ? 1 : 0);
-  $("todayMeta").innerHTML = n ? `${n} ${n===1?"session":"sessions"}${avg!=null?` · rated ${chip(avg)} on average`:""}` : "Nothing logged yet";
+  $("todayMeta").textContent = n ? `${n} ${n===1?"session":"sessions"}${avg!=null?" · average rating " + avg:""}` : "Nothing logged yet today";
+  const r = running();
+  $("runRow").hidden = !r;
+  if (r){ $("runText").textContent = "● " + r.name + " · " + clock(Date.now()-r.runningSince); $("runStop").dataset.id = r.id; }
+  const gc = allGoals().length, fc = folders().length;
+  $("goalsSub").textContent = gc ? gc + (gc===1?" goal":" goals") + (fc ? " in " + fc + (fc===1?" folder":" folders") : "") : "Create your first goal";
+  const jd = new Set(state.sessions.map(s=>dayKey(s.at)).concat(Object.keys(state.days).filter(k=>state.days[k].note))).size;
+  $("journalSub").textContent = jd ? jd + (jd===1?" day":" days") : "";
   $("nameAsk").hidden = !!(state.settings.name||"").trim();
   const week = sumSince(Date.now()-7*DAY);
   const pct = week / (7*WAKE_H*H) * 100;
@@ -614,6 +663,7 @@ setInterval(()=>{
   const r = running(); if (!r) return;
   const t = clock(Date.now()-r.runningSince);
   const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = "● " + t;
+  if (!$("runRow").hidden) $("runText").textContent = "● " + r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
   document.title = "● " + t + " · " + r.name;
   if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && $("rateScrim").hidden) render();
@@ -738,7 +788,7 @@ function saveDay(k, text){
   if (t) state.days[k] = {note:t, updatedAt:Date.now()}; else delete state.days[k];
   persist(); toast(t ? "Entry saved" : "Entry removed");
 }
-$("todayCard").addEventListener("click", ev=>{
+$("homeView").addEventListener("click", ev=>{
   const b = ev.target.closest("[data-entry]"); if (!b) return;
   const e = state.days[b.dataset.entry];
   $("entryText").value = e ? e.note : "";
@@ -834,10 +884,16 @@ $("folderDelete").onclick=()=>{ $("folderDelete").hidden=true; $("folderDeleteYe
 $("folderDeleteYes").onclick=()=>{
   const fid = editingFolder;
   Object.values(state.goals).forEach(g=>{ if(g.folderId===fid) g.folderId=null; });
-  delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go(null);
+  delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go("goals");
 };
-$("backBtn").onclick=()=>{ if (location.hash && history.length>1) history.back(); else go(null); };
+$("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
+$("goalsBtn").onclick=()=>go("goals");
+$("runStop").onclick=()=>{
+  const id = $("runStop").dataset.id; if (!state.goals[id]) return;
+  const s = stopGoal(id); if (!s) toast("Under a minute, not logged");
+  persist(); render(); wake(); nextRating();
+};
 
 /* ---------- backup ---------- */
 $("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; };
