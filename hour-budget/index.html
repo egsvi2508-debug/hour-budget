@@ -695,7 +695,6 @@ function cardHTML(g){
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
     <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
-    ${human?`<div class="human">${human}</div>`:""}
     <div class="actions">
       ${isRun?`<button type="button" class="primary stop" data-act="stop">Stop · rate session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
