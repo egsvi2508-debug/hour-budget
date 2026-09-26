@@ -184,6 +184,15 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
     <h2>Settings</h2>
     <label class="field"><span>Your name</span><input id="nameInput" maxlength="40" placeholder="Emmanuel" autocomplete="given-name"></label>
     <div class="row"><button type="button" id="nameSave">Save name</button></div>
+    <h2>Start fresh</h2>
+    <p class="note">Clears every session, rating and daily entry, and sets all goals back to 0 h. Your goals and folders stay.</p>
+    <div class="row">
+      <button type="button" class="ghost" id="clearBtn">Clear journal…</button>
+      <span id="clearConfirm" class="row" hidden>
+        <button type="button" class="danger" id="clearYes">Yes, clear everything logged</button>
+        <button type="button" class="ghost" id="clearNo">Cancel</button>
+      </span>
+    </div>
     <h2>Backup</h2>
     <p class="note">Everything lives on this device only. Save a backup file now and then, and use it to move your data to a new phone.</p>
     <div class="row">
@@ -303,7 +312,12 @@ const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 
 let state = load();
 let route = parseHash();          // {view:"home"|"folder"|"journal", id}
 let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
-let ratingId = null, editingDay = null;
+let ratingId = null, editingDay = null, editingSession = null, confirmSess = null, confirmDay = null, confirmClear = false;
+const openDays = new Set();
+document.addEventListener("toggle", e=>{
+  const d = e.target; if (!(d instanceof HTMLDetailsElement) || !d.dataset.day) return;
+  if (d.open) openDays.add(d.dataset.day); else openDays.delete(d.dataset.day);
+}, true);
 
 /* ---------- storage ---------- */
 function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}}; }
@@ -475,20 +489,57 @@ function renderJournal(){
     const label = k===todayK ? "Today" : d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:d.getFullYear()!==new Date().getFullYear()?"numeric":undefined});
     const note = state.days[k] && state.days[k].note;
     const editing = editingDay===k;
-    return `<details class="day"${editing?" open":""}>
+    const isOpen = editing || openDays.has(k) || ss.some(s=>s.id===editingSession);
+    return `<details class="day" data-day="${k}"${isOpen?" open":""}>
       <summary><span class="dname">${label}</span><span class="dsum">${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${editing
           ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
-             <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button></div>`
+             <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button>${note?`<button type="button" class="ghost" data-jdelentry="${k}">Delete entry</button>`:""}</div>`
           : (note ? `<p class="dentry">${esc(note)}</p>` : "") + `<button type="button" class="linkbtn" data-jedit="${k}" style="align-self:flex-start">${note?"Edit entry":"+ Add an entry"}</button>`}
-        ${ss.length ? `<ul class="sess">${ss.map(s=>`<li>
-            <div class="sl"><span>${timeOf(s.at)} · ${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":s.src==="manual"?" · added":""}</span><span>${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></div>
-            ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
-          </li>`).join("")}</ul>` : ""}
+        ${ss.length ? `<ul class="sess">${ss.map(sessHTML).join("")}</ul>` : ""}
+        <div class="row" style="border-top:1px dashed var(--line);padding-top:10px">
+          ${confirmDay===k
+            ? `<span class="note">Removes ${ss.length} ${ss.length===1?"session":"sessions"}${note?" and the entry":""}, and takes their hours off your goals.</span>
+               <button type="button" class="danger" data-dayyes="${k}">Delete day</button><button type="button" class="ghost" data-dayno="1">Keep</button>`
+            : `<button type="button" class="ghost" data-daydel="${k}">Delete this day…</button>`}
+        </div>
       </div>
     </details>`;
   }).join("") + `</div>`;
+}
+
+function sessHTML(s){
+  const label = `${timeOf(s.at)} · ${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":s.src==="manual"?" · added":""}`;
+  if (editingSession !== s.id){
+    return `<li>
+      <div class="sl"><span>${label}</span><span>${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></div>
+      ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
+      <button type="button" class="linkbtn" data-sedit="${s.id}" style="align-self:flex-start;font-size:13px;min-height:28px">Edit</button>
+    </li>`;
+  }
+  const r = s.rating!=null ? s.rating : 50;
+  return `<li style="background:var(--bg);border-radius:10px;padding:10px;gap:10px">
+    <div class="sl"><span>${label}</span><span>${s.ms<0?"":"+"}${hm(s.ms)}</span></div>
+    ${s.ms>0?`<div class="score"><b id="seNum" style="font-size:28px">${r}</b><span id="seWord">${word(r)}</span></div>
+      <input type="range" id="seRange" min="0" max="100" step="1" value="${r}" aria-label="Rating from 0 to 100">`:""}
+    <textarea id="seNote" maxlength="600" placeholder="Note (optional)" style="min-height:64px">${esc(s.note||"")}</textarea>
+    <div class="row">
+      <button type="button" class="primary" data-ssave="${s.id}" style="flex:0;min-width:100px">Save</button>
+      <button type="button" class="ghost" data-scancel="1">Cancel</button>
+      ${confirmSess===s.id
+        ? `<button type="button" class="danger" data-sdelyes="${s.id}">Delete (takes ${hm(Math.abs(s.ms))} off)</button>`
+        : `<button type="button" class="ghost" data-sdel="${s.id}">Delete…</button>`}
+    </div>
+  </li>`;
+}
+function removeSessions(list){
+  list.forEach(s=>{
+    const g = state.goals[s.goalId];
+    if (g) g.doneMs = Math.max(0, (g.doneMs||0) - s.ms);
+  });
+  const ids = new Set(list.map(s=>s.id));
+  state.sessions = state.sessions.filter(s=>!ids.has(s.id));
 }
 
 function folderHTML(f){
@@ -565,7 +616,7 @@ setInterval(()=>{
   const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = "● " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
   document.title = "● " + t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && $("rateScrim").hidden) render();
 },1000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden){ state = load(); render(); wake(); nextRating(); } });
 
@@ -620,6 +671,34 @@ $("rateSave").onclick = ()=>{
 $("list").addEventListener("click", ev=>{
   const fb = ev.target.closest("button[data-folder]");
   if (fb){ go("f-" + fb.dataset.folder); return; }
+  const pick = sel => ev.target.closest(sel);
+  let b;
+  if ((b = pick("[data-sedit]"))){ editingSession = b.dataset.sedit; confirmSess = null; return render(); }
+  if ((b = pick("[data-scancel]"))){ editingSession = null; confirmSess = null; return render(); }
+  if ((b = pick("[data-sdel]"))){ confirmSess = b.dataset.sdel; return render(); }
+  if ((b = pick("[data-sdelyes]"))){
+    const s = state.sessions.find(x=>x.id===b.dataset.sdelyes);
+    if (s){ removeSessions([s]); persist(); toast("Session deleted"); }
+    editingSession = null; confirmSess = null; return render();
+  }
+  if ((b = pick("[data-ssave]"))){
+    const s = state.sessions.find(x=>x.id===b.dataset.ssave);
+    if (s){
+      if ($("seRange")) s.rating = +$("seRange").value;
+      const n = $("seNote").value.trim(); if (n) s.note = n; else delete s.note;
+      persist(); toast("Session updated");
+    }
+    editingSession = null; return render();
+  }
+  if ((b = pick("[data-daydel]"))){ confirmDay = b.dataset.daydel; return render(); }
+  if ((b = pick("[data-dayno]"))){ confirmDay = null; return render(); }
+  if ((b = pick("[data-dayyes]"))){
+    const k = b.dataset.dayyes;
+    removeSessions(state.sessions.filter(s=>dayKey(s.at)===k));
+    delete state.days[k]; openDays.delete(k);
+    persist(); toast("Day deleted"); confirmDay = null; return render();
+  }
+  if ((b = pick("[data-jdelentry]"))){ saveDay(b.dataset.jdelentry, ""); editingDay = null; return render(); }
   const je = ev.target.closest("[data-jedit]"); if (je){ editingDay = je.dataset.jedit; render(); const t=$("jText"); if(t) t.focus(); return; }
   const jc = ev.target.closest("[data-jcancel]"); if (jc){ editingDay = null; render(); return; }
   const js = ev.target.closest("[data-jsave]"); if (js){ saveDay(js.dataset.jsave, $("jText").value); editingDay = null; render(); return; }
@@ -785,6 +864,20 @@ $("importYes").onclick=()=>{
   state = load(); pendingImport=null; $("importConfirm").hidden=true; persist(); go(null); toast("Backup restored");
 };
 $("importNo").onclick=()=>{ pendingImport=null; $("importConfirm").hidden=true; };
+
+/* ---------- journal editing helpers ---------- */
+$("list").addEventListener("input", ev=>{
+  if (ev.target.id==="seRange"){ const v=+ev.target.value; $("seNum").textContent=v; $("seWord").textContent=word(v); }
+});
+$("clearBtn").onclick=()=>{ $("clearBtn").hidden=true; $("clearConfirm").hidden=false; };
+$("clearNo").onclick=()=>{ $("clearBtn").hidden=false; $("clearConfirm").hidden=true; };
+$("clearYes").onclick=()=>{
+  Object.values(state.goals).forEach(g=>{ g.doneMs = 0; g.runningSince = null; });
+  state.sessions = []; state.days = {}; openDays.clear();
+  editingSession = null; confirmSess = null; confirmDay = null; editingDay = null;
+  persist(); $("clearBtn").hidden=false; $("clearConfirm").hidden=true; $("menu").hidden=true;
+  toast("Journal cleared. Fresh start."); render(); wake();
+};
 
 /* ---------- install ---------- */
 let deferred = null;
