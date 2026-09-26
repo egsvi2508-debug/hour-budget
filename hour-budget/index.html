@@ -109,7 +109,8 @@ input.num{width:72px;font-family:var(--mono)}
 .folder.hasrun{border-color:var(--run);box-shadow:0 0 0 3px var(--run-soft)}
 .folder .chev{color:var(--muted);font-size:22px;flex:none}
 .crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.crumb h2{font-family:var(--display);font-weight:700;font-size:24px;margin:0;flex:1;min-width:0;overflow-wrap:anywhere}
+.crumb{justify-content:space-between}
+.crumb h2{font-family:var(--display);font-weight:700;font-size:28px;margin:4px 0 0;flex:1 0 100%;order:3;min-width:0;overflow-wrap:break-word}
 .section-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:4px 0 -4px}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .primary{flex:1}
@@ -129,6 +130,15 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .bb-text{display:flex;flex-direction:column;gap:2px;min-width:0}
 .bb-title{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.1}
 .bb-sub{font-size:14px;color:var(--muted)}
+.hright{display:flex;align-items:center;gap:8px}
+.statbtn{min-height:36px;padding:6px 14px;border-radius:99px;font-size:14px;font-weight:500}
+.statgrid{display:flex;flex-direction:column;gap:14px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.stat h3{font-family:var(--display);font-weight:500;font-size:17px;margin:0 0 8px}
+.stat dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
+.stat dt{color:var(--muted)}
+.stat dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.stat .sub{font-size:13px;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.07em}
 .bb-arrow{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:24px}
 .homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
 .rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
@@ -192,6 +202,7 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
       <h1 id="greeting">Hello</h1>
     </div>
     <div class="hright">
+      <button type="button" class="statbtn" id="statsBtn">Stats</button>
       <button type="button" class="iconbtn ghost" id="menuBtn" aria-label="Settings and backup" aria-expanded="false">⋯</button>
     </div>
   </header>
@@ -233,7 +244,6 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
     <div class="daypanel" id="todayCard">
       <div class="dp-label">Today</div>
       <div class="dp-big" id="todayTotal">0h 00m</div>
-      <div class="dp-meta" id="todayMeta"></div>
       <div class="dp-run" id="runRow" hidden>
         <span id="runText"></span>
         <button type="button" class="dp-stop" id="runStop">Stop</button>
@@ -242,7 +252,7 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
     </div>
 
     <button type="button" class="bigbtn" id="goalsBtn">
-      <span class="bb-text"><span class="bb-title">My goals</span><span class="bb-sub" id="goalsSub"></span></span>
+      <span class="bb-text"><span class="bb-title">My goals</span></span>
       <span class="bb-arrow" aria-hidden="true">→</span>
     </button>
 
@@ -265,7 +275,7 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
 
     <button type="button" class="rowlink" id="journalBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
-      <span class="rl-text">Journal</span><span class="rl-sub" id="journalSub"></span><span class="chev" aria-hidden="true">›</span>
+      <span class="rl-text">Journal</span><span class="rl-sub"></span><span class="chev" aria-hidden="true">›</span>
     </button>
   </section>
 
@@ -384,6 +394,7 @@ function newId(p){ return p + Date.now().toString(36) + Math.random().toString(3
 function parseHash(){
   if (location.hash === "#journal") return {view:"journal"};
   if (location.hash === "#goals") return {view:"goals"};
+  if (location.hash === "#stats") return {view:"stats"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
   return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
@@ -451,25 +462,23 @@ function render(){
   const r = running();
   document.title = r ? "● " + clock(Date.now()-r.runningSince) + " · " + r.name : "Hour Budget";
 
-  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals";
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats";
   $("homeView").hidden = !home; $("homeHeader").hidden = !home;
   if (!home){ $("menu").hidden = true; }
-  $("crumb").hidden = home; $("folderStats").hidden = home;
+  $("crumb").hidden = home; $("folderStats").hidden = !journal;
   $("folderEditBtn").hidden = !folder;
-  $("addRow").hidden = home || journal || !$("form").hidden || !$("folderForm").hidden;
+  $("addRow").hidden = home || journal || statsView || !$("form").hidden || !$("folderForm").hidden;
   $("addFolderBtn").hidden = !goalsView;
   $("backBtn").textContent = folder ? "‹ My goals" : "‹ Home";
 
   if (home){ renderToday(); $("list").innerHTML = ""; return; }
   if (journal) return renderJournal();
+  if (statsView) return renderStats();
 
   if (folder){
     const f = state.folders[route.id], gs = goalsIn(route.id);
     $("addBtn").textContent = "+ New goal in " + f.name;
     $("folderTitle").textContent = f.name;
-    const ids = new Set(gs.map(g=>g.id));
-    const total = gs.reduce((s,g)=>s+doneNow(g),0);
-    $("folderStats").textContent = gs.length + (gs.length===1?" goal":" goals") + " · " + hm(total) + " logged · " + hm(sumSince(Date.now()-7*DAY, ids)) + " in the last 7 days";
     $("list").innerHTML = gs.length ? gs.map(cardHTML).join("")
       : `<div class="empty"><h2>This folder is empty</h2><p>Tap “New goal” to add the first goal to ${esc(f.name)}.</p></div>`;
     return;
@@ -478,8 +487,6 @@ function render(){
   $("addBtn").textContent = "+ New goal";
   $("folderTitle").textContent = "My goals";
   const fs = folders(), loose = goalsIn(null);
-  const tot = allGoals().reduce((a,g)=>a+doneNow(g),0);
-  $("folderStats").textContent = allGoals().length ? allGoals().length + (allGoals().length===1?" goal":" goals") + " · " + hm(tot) + " logged in total" : "";
   if (!fs.length && !loose.length){
     $("list").innerHTML = `<div class="empty"><h2>Give your time a budget</h2><p>Make folders like “Maths” or “Piano”, put goals inside like “Analysis 1 · 100 hours”, and start the timer while you work.</p></div>`;
     return;
@@ -495,16 +502,9 @@ function renderToday(){
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
   const total = sumSince(t0);
   $("todayTotal").textContent = hm(total);
-  const avg = weightedAvg(today);
-  const n = today.length + (running() ? 1 : 0);
-  $("todayMeta").textContent = n ? `${n} ${n===1?"session":"sessions"}${avg!=null?" · average rating " + avg:""}` : "Nothing logged yet today";
   const r = running();
   $("runRow").hidden = !r;
   if (r){ $("runText").textContent = "● " + r.name + " · " + clock(Date.now()-r.runningSince); $("runStop").dataset.id = r.id; }
-  const gc = allGoals().length, fc = folders().length;
-  $("goalsSub").textContent = gc ? gc + (gc===1?" goal":" goals") + (fc ? " in " + fc + (fc===1?" folder":" folders") : "") : "Create your first goal";
-  const jd = new Set(state.sessions.map(s=>dayKey(s.at)).concat(Object.keys(state.days).filter(k=>state.days[k].note))).size;
-  $("journalSub").textContent = jd ? jd + (jd===1?" day":" days") : "";
   $("nameAsk").hidden = !!(state.settings.name||"").trim();
   const week = sumSince(Date.now()-7*DAY);
   const pct = week / (7*WAKE_H*H) * 100;
@@ -525,7 +525,7 @@ function renderJournal(){
   state.sessions.forEach(s=>{ const k=dayKey(s.at); (byDay[k]=byDay[k]||[]).push(s); });
   Object.keys(state.days).forEach(k=>{ if (state.days[k].note) byDay[k]=byDay[k]||[]; });
   const keys = Object.keys(byDay).sort().reverse();
-  $("folderStats").textContent = keys.length ? keys.length + (keys.length===1?" day":" days") + " so far. Tap a day to open it." : "";
+  $("folderStats").textContent = keys.length ? "Tap a day to open it." : "";
   if (!keys.length){
     $("list").innerHTML = `<div class="empty"><h2>Your journal is empty</h2><p>Every session you rate and every note you write shows up here, one tab per day.</p></div>`;
     return;
@@ -556,6 +556,47 @@ function renderJournal(){
       </div>
     </details>`;
   }).join("") + `</div>`;
+}
+
+function renderStats(){
+  $("folderTitle").textContent = "Stats";
+  const now = Date.now(), t0 = startOfToday();
+  const work = state.sessions.filter(s=>s.ms>0);
+  const r = running();
+  const block = (from) => {
+    const ss = work.filter(s=>s.at>=from);
+    return {ms: sumSince(from), n: ss.length + (r && r.runningSince>=from ? 1 : 0), avg: weightedAvg(ss)};
+  };
+  const today = block(t0), w7 = block(now-7*DAY), w30 = block(now-30*DAY), all = block(0);
+  const dayset = new Set(work.map(s=>dayKey(s.at)));
+  let streak = 0; { const d = new Date(); if (!dayset.has(dayKey(d.getTime())) && !r) d.setDate(d.getDate()-1); while (dayset.has(dayKey(d.getTime())) || (streak===0 && r && dayKey(d.getTime())===dayKey(now))){ streak++; d.setDate(d.getDate()-1); } }
+  const journalDays = new Set(state.sessions.map(s=>dayKey(s.at)).concat(Object.keys(state.days).filter(k=>state.days[k].note))).size;
+  const pctWake = (ms, days) => { const p = ms/(days*WAKE_H*H)*100; return ms ? (p<1?"under 1%":Math.round(p)+"%") : "–"; };
+  const row = (k,v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  const avgTxt = a => a==null ? "–" : a + " · " + word(a);
+  const byDayMs = {}; work.forEach(s=>{ const k=dayKey(s.at); byDayMs[k]=(byDayMs[k]||0)+s.ms; });
+  const best = Object.entries(byDayMs).sort((a,b)=>b[1]-a[1])[0];
+  let html = `<div class="statgrid">
+    <section class="stat"><h3>Today</h3><dl>${row("Hours", hm(today.ms))}${row("Sessions", today.n)}${row("Average rating", avgTxt(today.avg))}</dl></section>
+    <section class="stat"><h3>Last 7 days</h3><dl>${row("Hours", hm(w7.ms))}${row("Per day", hm(w7.ms/7))}${row("Share of waking hours", pctWake(w7.ms,7))}${row("Sessions", w7.n)}${row("Average rating", avgTxt(w7.avg))}</dl></section>
+    <section class="stat"><h3>Last 30 days</h3><dl>${row("Hours", hm(w30.ms))}${row("Per day", hm(w30.ms/30))}${row("Share of waking hours", pctWake(w30.ms,30))}${row("Average rating", avgTxt(w30.avg))}</dl></section>
+    <section class="stat"><h3>All time</h3><dl>${row("Hours", hm(all.ms))}${row("Sessions", all.n)}${row("Average rating", avgTxt(all.avg))}${row("Streak", streak + (streak===1?" day":" days"))}${row("Days in journal", journalDays)}${best?row("Best day", keyDate(best[0]).toLocaleDateString(undefined,{day:"numeric",month:"short"}) + " · " + hm(best[1])):""}</dl></section>`;
+  const fs = folders();
+  const groups = fs.map(f=>({name:f.name, goals:goalsIn(f.id)})).concat(goalsIn(null).length ? [{name: fs.length ? "Other goals" : "Goals", goals:goalsIn(null)}] : []);
+  groups.forEach(gr=>{
+    const ids = new Set(gr.goals.map(g=>g.id));
+    const ss = work.filter(s=>ids.has(s.goalId));
+    const tot = gr.goals.reduce((a,g)=>a+doneNow(g),0);
+    html += `<section class="stat"><h3>${esc(gr.name)}</h3><dl>${row("Hours", hm(tot))}${row("Last 7 days", hm(sumSince(now-7*DAY, ids)))}${row("Average rating", avgTxt(weightedAvg(ss)))}</dl>`;
+    if (gr.goals.length){
+      html += `<p class="sub">Goals</p><dl>` + gr.goals.map(g=>{
+        const gs = work.filter(s=>s.goalId===g.id), a = weightedAvg(gs);
+        return row(esc(g.name), hm(doneNow(g)) + (a!=null ? " · " + a : ""));
+      }).join("") + `</dl>`;
+    }
+    html += `</section>`;
+  });
+  $("list").innerHTML = html + `</div>`;
 }
 
 function sessHTML(s){
@@ -599,7 +640,6 @@ function folderHTML(f){
     <span class="ficon">${FOLDER_SVG}</span>
     <span class="fbody">
       <span class="fname">${esc(f.name)}</span>
-      <span class="fmeta">${gs.length} ${gs.length===1?"goal":"goals"} · ${hm(total)} logged</span>
       ${run?`<span class="frun" data-frun="${f.id}">● ${esc(run.name)} · ${clock(Date.now()-run.runningSince)}</span>`:""}
     </span>
     <span class="chev" aria-hidden="true">›</span>
@@ -641,7 +681,7 @@ function cardHTML(g){
     <div class="top"><h3 class="name">${esc(g.name)}</h3><span class="mode">${down?"Countdown":"Tally"}</span></div>
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
-    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span>${hm(done)} total${avg!=null?" · avg "+avg:""}</span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
+    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
     ${human?`<div class="human">${human}</div>`:""}
     <div class="actions">
       ${isRun?`<button type="button" class="primary stop" data-act="stop">Stop · rate session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
@@ -652,7 +692,7 @@ function cardHTML(g){
         <input class="num" id="h-${g.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0" aria-label="hours"><span class="note">h</span>
         <input class="num" id="m-${g.id}" type="number" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="minutes"><span class="note">min</span></div>
       <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Correct (remove)</button></div>
-      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions${avg!=null?" · average rating "+avg:""}</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})} · ${timeOf(e.at)}${e.src==="correction"?" · correction":e.src==="manual"?" · added":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
+      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})} · ${timeOf(e.at)}${e.src==="correction"?" · correction":e.src==="manual"?" · added":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
       <div class="row"><button type="button" class="ghost" data-act="edit">Edit / move</button>
         ${confirmDelete===g.id?`<button type="button" class="danger" data-act="delete-yes">Delete for good</button><button type="button" class="ghost" data-act="delete-no">Keep</button>`:`<button type="button" class="ghost" data-act="delete">Delete…</button>`}</div>
     </div>`:""}
@@ -889,6 +929,7 @@ $("folderDeleteYes").onclick=()=>{
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
+$("statsBtn").onclick=()=>go("stats");
 $("runStop").onclick=()=>{
   const id = $("runStop").dataset.id; if (!state.goals[id]) return;
   const s = stopGoal(id); if (!s) toast("Under a minute, not logged");
