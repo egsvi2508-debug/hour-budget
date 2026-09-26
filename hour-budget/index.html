@@ -139,7 +139,8 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .stat dt{color:var(--muted)}
 .stat dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
 .stat .sub{font-size:13px;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.07em}
-.bb-arrow{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:32px;line-height:1;font-weight:600}
+.bb-arrow{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center}
+.bb-arrow svg{width:28px;height:28px;display:block;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
 .rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
 .rowlink svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
@@ -261,7 +262,7 @@ details.sitem summary .sval{white-space:nowrap}
 
     <button type="button" class="bigbtn" id="goalsBtn">
       <span class="bb-text"><span class="bb-title">My goals</span></span>
-      <span class="bb-arrow" aria-hidden="true">→</span>
+      <span class="bb-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
     </button>
 
     <div class="homenote">
