@@ -159,6 +159,18 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .t3j .mk{flex:none;width:18px;font-weight:700}
 .t3j .ok{color:var(--accent)}
 .t3j .no{color:var(--muted)}
+.grat{border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.gratlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.gratlist li{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.4;padding:4px 0}
+.gratlist li::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:.55em}
+.gratlist .gtext{flex:1;overflow-wrap:anywhere}
+.gratlist .gdel{flex:none;border:0;background:none;color:var(--muted);min-height:0;padding:0 2px;font-size:18px;line-height:1;opacity:.6}
+.gratadd{display:flex;gap:8px}
+.gratadd input{flex:1;min-width:0}
+.gratadd button{flex:none}
+.gj{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.gj li{display:flex;gap:8px;align-items:flex-start}
+.gj li::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:.55em}
 .homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
 .rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
 .rowlink svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
@@ -294,6 +306,15 @@ details.sitem summary .sval{white-space:nowrap}
         </div>
       </div>
     </div>
+
+    <section class="grat" id="grat" aria-label="Gratitude">
+      <div class="eyebrow">Grateful for</div>
+      <ul class="gratlist" id="gratList"></ul>
+      <form class="gratadd" id="gratForm" autocomplete="off">
+        <input id="gratInput" maxlength="160" placeholder="I'm grateful for…" aria-label="Something you're grateful for">
+        <button type="submit" class="ghost" id="gratAddBtn">Add</button>
+      </form>
+    </section>
 
     <button type="button" class="rowlink" id="journalBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
@@ -556,13 +577,36 @@ $("t3Save").onclick = ()=>{
     .map(text=>{ const prev = old.find(o=>o.text===text); return {text, done: prev ? prev.done : false}; });
   const d = state.days[k] || {};
   if (items.length) d.top3 = items; else delete d.top3;
-  if (d.note || d.top3) state.days[k] = d; else delete state.days[k];
+  if (dayHasContent(d)) state.days[k] = d; else delete state.days[k];
   persist(); t3Editing = false; renderTop3(); toast(items.length ? "Priorities set for today" : "Priorities cleared");
 };
 ["t3a","t3b","t3c"].forEach((id,i,arr)=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(i<2) $(arr[i+1]).focus(); else $("t3Save").click(); } }));
 
+function renderGrat(){
+  const k = dayKey(Date.now()), list = (state.days[k] && state.days[k].grateful) || [];
+  $("gratList").innerHTML = list.map((t,i)=>`<li><span class="gtext">${esc(t)}</span><button type="button" class="gdel" data-gdel="${i}" aria-label="Remove">×</button></li>`).join("");
+  $("gratInput").placeholder = list.length ? "And also…" : "I'm grateful for…";
+}
+$("gratForm").addEventListener("submit", ev=>{
+  ev.preventDefault();
+  const t = $("gratInput").value.trim(); if (!t) return;
+  const k = dayKey(Date.now()), d = state.days[k] || {};
+  d.grateful = (d.grateful || []).concat([t]).slice(0, 20);
+  state.days[k] = d; persist();
+  $("gratInput").value = ""; renderGrat(); $("gratInput").focus();
+});
+$("gratList").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-gdel]"); if (!b) return;
+  const k = dayKey(Date.now()), d = state.days[k]; if (!d || !d.grateful) return;
+  d.grateful.splice(+b.dataset.gdel, 1);
+  if (!d.grateful.length) delete d.grateful;
+  if (!dayHasContent(d)) delete state.days[k];
+  persist(); renderGrat();
+});
+
 function renderToday(){
   renderTop3();
+  renderGrat();
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
   const total = sumSince(t0);
@@ -583,7 +627,7 @@ function renderJournal(){
   $("folderTitle").textContent = "Journal";
   const byDay = {};
   state.sessions.forEach(s=>{ const k=dayKey(s.at); (byDay[k]=byDay[k]||[]).push(s); });
-  Object.keys(state.days).forEach(k=>{ const d=state.days[k]; if (d.note || (d.top3&&d.top3.length)) byDay[k]=byDay[k]||[]; });
+  Object.keys(state.days).forEach(k=>{ if (dayHasContent(state.days[k])) byDay[k]=byDay[k]||[]; });
   const keys = Object.keys(byDay).sort().reverse();
   $("folderStats").textContent = keys.length ? "Tap a day to open it." : "";
   if (!keys.length){
@@ -599,12 +643,14 @@ function renderJournal(){
     const note = state.days[k] && state.days[k].note;
     const t3 = (state.days[k] && state.days[k].top3) || [];
     const t3done = t3.filter(x=>x.done).length;
+    const gr = (state.days[k] && state.days[k].grateful) || [];
     const editing = editingDay===k;
     const isOpen = editing || openDays.has(k) || ss.some(s=>s.id===editingSession);
     return `<details class="day" data-day="${k}"${isOpen?" open":""}>
       <summary><span class="dname">${label}</span><span class="dsum">${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${t3.length?`<div><div class="eyebrow" style="margin-bottom:6px">3 things</div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></div>`:""}
+        ${gr.length?`<div><div class="eyebrow" style="margin-bottom:6px">Grateful for</div><ul class="gj">${gr.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></div>`:""}
         ${editing
           ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
              <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button>${note?`<button type="button" class="ghost" data-jdelentry="${k}">Delete entry</button>`:""}</div>`
@@ -627,7 +673,7 @@ function renderStats(){
   const today = block(t0), w7 = block(now-7*DAY), w30 = block(now-30*DAY), all = block(0);
   const dayset = new Set(work.map(s=>dayKey(s.at)));
   let streak = 0; { const d = new Date(); if (!dayset.has(dayKey(d.getTime())) && !r) d.setDate(d.getDate()-1); while (dayset.has(dayKey(d.getTime())) || (streak===0 && r && dayKey(d.getTime())===dayKey(now))){ streak++; d.setDate(d.getDate()-1); } }
-  const journalDays = new Set(state.sessions.map(s=>dayKey(s.at)).concat(Object.keys(state.days).filter(k=>state.days[k].note||(state.days[k].top3&&state.days[k].top3.length)))).size;
+  const journalDays = new Set(state.sessions.map(s=>dayKey(s.at)).concat(Object.keys(state.days).filter(k=>dayHasContent(state.days[k])))).size;
   const t3Stat = (from) => { let d=0,t=0,full=0,days=0; Object.entries(state.days).forEach(([k,v])=>{ if(!v.top3||!v.top3.length) return; if(keyDate(k).getTime() < from) return; days++; const dn=v.top3.filter(x=>x.done).length; d+=dn; t+=v.top3.length; if(dn===v.top3.length) full++; }); return t ? d + " of " + t + " · all 3 on " + full + (full===1?" day":" days") : "–"; };
   const pctWake = (ms, days) => { const p = ms/(days*WAKE_H*H)*100; return ms ? (p<1?"under 1%":Math.round(p)+"%") : "–"; };
   const row = (k,v) => `<dt>${k}</dt><dd>${v}</dd>`;
@@ -638,7 +684,7 @@ function renderStats(){
     <section class="stat"><h3>Today</h3><dl>${row("Hours", hm(today.ms))}${row("Sessions", today.n)}${row("Average rating", avgTxt(today.avg))}</dl></section>
     <section class="stat"><h3>Last 7 days</h3><dl>${row("Hours", hm(w7.ms))}${row("Per day", hm(w7.ms/7))}${row("Share of waking hours", pctWake(w7.ms,7))}${row("Sessions", w7.n)}${row("Average rating", avgTxt(w7.avg))}${row("3 things done", t3Stat(startOfToday()-6*DAY))}</dl></section>
     <section class="stat"><h3>Last 30 days</h3><dl>${row("Hours", hm(w30.ms))}${row("Per day", hm(w30.ms/30))}${row("Share of waking hours", pctWake(w30.ms,30))}${row("Average rating", avgTxt(w30.avg))}</dl></section>
-    <section class="stat"><h3>All time</h3><dl>${row("Hours", hm(all.ms))}${row("Sessions", all.n)}${row("Average rating", avgTxt(all.avg))}${row("Streak", streak + (streak===1?" day":" days"))}${row("Days in journal", journalDays)}${row("3 things done", t3Stat(0))}${best?row("Best day", keyDate(best[0]).toLocaleDateString(undefined,{day:"numeric",month:"short"}) + " · " + hm(best[1])):""}</dl></section>`;
+    <section class="stat"><h3>All time</h3><dl>${row("Hours", hm(all.ms))}${row("Sessions", all.n)}${row("Average rating", avgTxt(all.avg))}${row("Streak", streak + (streak===1?" day":" days"))}${row("Days in journal", journalDays)}${row("3 things done", t3Stat(0))}${row("Days with gratitude", Object.values(state.days).filter(d=>d.grateful&&d.grateful.length).length)}${best?row("Best day", keyDate(best[0]).toLocaleDateString(undefined,{day:"numeric",month:"short"}) + " · " + hm(best[1])):""}</dl></section>`;
   const fs = folders();
   const groups = fs.map(f=>({name:f.name, goals:goalsIn(f.id)})).concat(goalsIn(null).length ? [{name: fs.length ? "Other goals" : "Goals", goals:goalsIn(null)}] : []);
   groups.forEach(gr=>{
@@ -766,7 +812,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = "● " + r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
   document.title = "● " + t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -895,12 +941,13 @@ $("list").addEventListener("click", ev=>{
 });
 
 /* ---------- daily entry ---------- */
+function dayHasContent(d){ return !!(d && (d.note || (d.top3 && d.top3.length) || (d.grateful && d.grateful.length))); }
 function saveDay(k, text){
   const t = (text||"").trim();
   const d = state.days[k] || {};
   if (t) d.note = t; else delete d.note;
   d.updatedAt = Date.now();
-  if (d.note || (d.top3 && d.top3.length)) state.days[k] = d; else delete state.days[k];
+  if (dayHasContent(d)) state.days[k] = d; else delete state.days[k];
   persist(); toast(t ? "Entry saved" : "Entry removed");
 }
 $("homeView").addEventListener("click", ev=>{
