@@ -180,17 +180,26 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:
 /* journal */
 .days{display:flex;flex-direction:column;gap:8px}
 details.day{background:var(--surface);border:1px solid var(--line);border-radius:12px}
-details.day summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:52px}
-details.day summary::-webkit-details-marker{display:none}
-details.day summary .dname{font-weight:600}
-details.day summary .dsum{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center}
-details.day[open] summary{border-bottom:1px dashed var(--line)}
+details.day > summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:52px}
+details.day > summary::-webkit-details-marker{display:none}
+details.day > summary .dname{font-weight:600}
+details.day > summary .dsum{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center}
+details.day[open] > summary{border-bottom:1px dashed var(--line)}
 .dbody{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
 .sess{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .sess li{display:flex;flex-direction:column;gap:2px}
 .sess .sl{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}
 .sess .sl span:first-child{overflow-wrap:anywhere}
 .sess .sn{font-size:13px;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
+.sess li{gap:0}
+details.sitem summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:40px;font-size:14px;font-variant-numeric:tabular-nums}
+details.sitem summary::-webkit-details-marker{display:none}
+details.sitem summary .sname{overflow-wrap:anywhere}
+details.sitem summary .sname::before{content:"▸";display:inline-block;width:14px;color:var(--muted);transition:transform .15s}
+details.sitem[open] summary .sname::before{transform:rotate(90deg)}
+details.sitem summary .sval{white-space:nowrap}
+.sbody{display:flex;flex-direction:column;gap:4px;padding:2px 0 8px 14px}
+.swhen{font-size:13px;color:var(--muted)}
 .dentry{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
 </style>
 </head>
@@ -343,6 +352,8 @@ details.day[open] summary{border-bottom:1px dashed var(--line)}
     <div class="score"><b id="rateNum">50</b><span id="rateWord">okay</span></div>
     <input type="range" id="rateRange" min="0" max="100" step="1" value="50" aria-label="Productivity and satisfaction from 0 to 100">
     <div class="scale"><span>0 · wasted</span><span>100 · excellent</span></div>
+    <p class="note" style="margin-top:-6px">The rating is final once you save it.</p>
+    <label class="field"><span>When did you do it? (optional)</span><input type="time" id="rateWhen" style="max-width:160px"></label>
     <label class="field"><span>How did it feel? What could be better? (optional)</span>
       <textarea id="rateNote" maxlength="600" placeholder="Focused after the first 20 min. Phone was a distraction."></textarea></label>
     <button type="button" class="primary" id="rateSave">Save rating</button>
@@ -360,9 +371,11 @@ let state = load();
 let route = parseHash();          // {view:"home"|"folder"|"journal", id}
 let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
 let ratingId = null, editingDay = null, editingSession = null, confirmSess = null, confirmDay = null, confirmClear = false;
-const openDays = new Set();
+const openDays = new Set(), openSess = new Set();
 document.addEventListener("toggle", e=>{
-  const d = e.target; if (!(d instanceof HTMLDetailsElement) || !d.dataset.day) return;
+  const d = e.target; if (!(d instanceof HTMLDetailsElement)) return;
+  if (d.dataset.sess){ if (d.open) openSess.add(d.dataset.sess); else openSess.delete(d.dataset.sess); return; }
+  if (!d.dataset.day) return;
   if (d.open) openDays.add(d.dataset.day); else openDays.delete(d.dataset.day);
 }, true);
 
@@ -426,6 +439,9 @@ function dateLabel(iso){
   return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:d.getFullYear()!==new Date().getFullYear()?"numeric":undefined});
 }
 function timeOf(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
+function hhmm(ts){ const d=new Date(ts); return pad(d.getHours())+":"+pad(d.getMinutes()); }
+function whenLabel(w){ const [h,m]=w.split(":").map(Number); const d=new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
+function sortKey(s){ return s.when || "99:99"; }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
 function chip(r){ if (r==null) return ""; return `<span class="chip ${r>=70?"hi":r<40?"lo":""}">${r}</span>`; }
@@ -532,7 +548,7 @@ function renderJournal(){
   }
   const todayK = dayKey(Date.now());
   $("list").innerHTML = `<div class="days">` + keys.map(k=>{
-    const ss = byDay[k].slice().sort((a,b)=>a.at-b.at), work = ss.filter(s=>s.ms>0);
+    const ss = byDay[k].slice().sort((a,b)=>sortKey(a).localeCompare(sortKey(b)) || a.at-b.at), work = ss.filter(s=>s.ms>0);
     const tot = ss.reduce((a,s)=>a+s.ms,0), avg = weightedAvg(work);
     const d = keyDate(k);
     const label = k===todayK ? "Today" : d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:d.getFullYear()!==new Date().getFullYear()?"numeric":undefined});
@@ -600,19 +616,22 @@ function renderStats(){
 }
 
 function sessHTML(s){
-  const label = `${timeOf(s.at)} · ${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":s.src==="manual"?" · added":""}`;
+  const label = `${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":""}`;
   if (editingSession !== s.id){
-    return `<li>
-      <div class="sl"><span>${label}</span><span>${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></div>
-      ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
-      <button type="button" class="linkbtn" data-sedit="${s.id}" style="align-self:flex-start;font-size:13px;min-height:28px">Edit</button>
-    </li>`;
+    return `<li><details class="sitem" data-sess="${s.id}"${openSess.has(s.id)?" open":""}>
+      <summary><span class="sname">${label}</span><span class="sval">${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></summary>
+      <div class="sbody">
+        ${s.when?`<div class="swhen">Around ${whenLabel(s.when)}</div>`:""}
+        ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
+        ${!s.when && !s.note ? `<div class="swhen">No time or note added.</div>` : ""}
+        <button type="button" class="linkbtn" data-sedit="${s.id}" style="align-self:flex-start;font-size:13px;min-height:28px">Edit</button>
+      </div>
+    </details></li>`;
   }
-  const r = s.rating!=null ? s.rating : 50;
   return `<li style="background:var(--bg);border-radius:10px;padding:10px;gap:10px">
     <div class="sl"><span>${label}</span><span>${s.ms<0?"":"+"}${hm(s.ms)}</span></div>
-    ${s.ms>0?`<div class="score"><b id="seNum" style="font-size:28px">${r}</b><span id="seWord">${word(r)}</span></div>
-      <input type="range" id="seRange" min="0" max="100" step="1" value="${r}" aria-label="Rating from 0 to 100">`:""}
+    ${s.rating!=null?`<div class="swhen">Rating ${chip(s.rating)} ${word(s.rating)} · ratings are fixed once saved</div>`:""}
+    <label class="field"><span>When (optional)</span><input type="time" id="seWhen" value="${s.when||""}" style="max-width:160px"></label>
     <textarea id="seNote" maxlength="600" placeholder="Note (optional)" style="min-height:64px">${esc(s.note||"")}</textarea>
     <div class="row">
       <button type="button" class="primary" data-ssave="${s.id}" style="flex:0;min-width:100px">Save</button>
@@ -692,7 +711,7 @@ function cardHTML(g){
         <input class="num" id="h-${g.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0" aria-label="hours"><span class="note">h</span>
         <input class="num" id="m-${g.id}" type="number" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="minutes"><span class="note">min</span></div>
       <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Correct (remove)</button></div>
-      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})} · ${timeOf(e.at)}${e.src==="correction"?" · correction":e.src==="manual"?" · added":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
+      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}${e.when?" · "+whenLabel(e.when):""}${e.src==="correction"?" · correction":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
       <div class="row"><button type="button" class="ghost" data-act="edit">Edit / move</button>
         ${confirmDelete===g.id?`<button type="button" class="danger" data-act="delete-yes">Delete for good</button><button type="button" class="ghost" data-act="delete-no">Keep</button>`:`<button type="button" class="ghost" data-act="delete">Delete…</button>`}</div>
     </div>`:""}
@@ -741,8 +760,8 @@ function nextRating(){
 function openRating(sid){
   const s = state.sessions.find(x=>x.id===sid); if (!s) return;
   ratingId = sid;
-  $("rateWhat").textContent = (s.goalName||"Goal") + " · " + hm(s.ms) + " · " + timeOf(s.at);
-  $("rateRange").value = 50; $("rateNote").value = ""; updateRate();
+  $("rateWhat").textContent = (s.goalName||"Goal") + " · " + hm(s.ms);
+  $("rateRange").value = 50; $("rateNote").value = ""; $("rateWhen").value = s.src==="timer" ? hhmm(s.at) : ""; updateRate();
   $("rateScrim").hidden = false; document.body.style.overflow = "hidden";
   $("rateRange").focus();
 }
@@ -750,7 +769,7 @@ function updateRate(){ const v = +$("rateRange").value; $("rateNum").textContent
 $("rateRange").addEventListener("input", updateRate);
 $("rateSave").onclick = ()=>{
   const s = state.sessions.find(x=>x.id===ratingId);
-  if (s){ s.rating = +$("rateRange").value; const n = $("rateNote").value.trim(); if (n) s.note = n; }
+  if (s){ s.rating = +$("rateRange").value; const n = $("rateNote").value.trim(); if (n) s.note = n; const w = $("rateWhen").value; if (w) s.when = w; else delete s.when; }
   persist(); ratingId = null;
   $("rateScrim").hidden = true; document.body.style.overflow = "";
   toast("Saved to your journal");
@@ -774,8 +793,9 @@ $("list").addEventListener("click", ev=>{
   if ((b = pick("[data-ssave]"))){
     const s = state.sessions.find(x=>x.id===b.dataset.ssave);
     if (s){
-      if ($("seRange")) s.rating = +$("seRange").value;
       const n = $("seNote").value.trim(); if (n) s.note = n; else delete s.note;
+      const w = $("seWhen").value; if (w) s.when = w; else delete s.when;
+      openSess.add(s.id);
       persist(); toast("Session updated");
     }
     editingSession = null; return render();
@@ -964,7 +984,6 @@ $("importNo").onclick=()=>{ pendingImport=null; $("importConfirm").hidden=true; 
 
 /* ---------- journal editing helpers ---------- */
 $("list").addEventListener("input", ev=>{
-  if (ev.target.id==="seRange"){ const v=+ev.target.value; $("seNum").textContent=v; $("seWord").textContent=word(v); }
 });
 $("clearBtn").onclick=()=>{ $("clearBtn").hidden=true; $("clearConfirm").hidden=false; };
 $("clearNo").onclick=()=>{ $("clearBtn").hidden=false; $("clearConfirm").hidden=true; };
