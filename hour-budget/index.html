@@ -244,27 +244,6 @@ details.sitem summary .sval{white-space:nowrap}
     <h2>Settings</h2>
     <label class="field"><span>Your name</span><input id="nameInput" maxlength="40" placeholder="Emmanuel" autocomplete="given-name"></label>
     <div class="row"><button type="button" id="nameSave">Save name</button></div>
-    <h2>Start fresh</h2>
-    <p class="note">Clears every session, rating and daily entry, and sets all goals back to 0 h. Your goals and folders stay.</p>
-    <div class="row">
-      <button type="button" class="ghost" id="clearBtn">Clear journal…</button>
-      <span id="clearConfirm" class="row" hidden>
-        <button type="button" class="danger" id="clearYes">Yes, clear everything logged</button>
-        <button type="button" class="ghost" id="clearNo">Cancel</button>
-      </span>
-    </div>
-    <h2>Backup</h2>
-    <p class="note">Everything lives on this device only. Save a backup file now and then, and use it to move your data to a new phone.</p>
-    <div class="row">
-      <button type="button" id="exportBtn">Save backup file</button>
-      <button type="button" id="importBtn">Restore from backup</button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
-    </div>
-    <div class="row" id="importConfirm" hidden>
-      <span class="note" id="importText"></span>
-      <button type="button" class="danger" id="importYes">Replace my data</button>
-      <button type="button" class="ghost" id="importNo">Cancel</button>
-    </div>
   </section>
 
   <!-- opening page -->
@@ -631,12 +610,6 @@ function renderJournal(){
              <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button>${note?`<button type="button" class="ghost" data-jdelentry="${k}">Delete entry</button>`:""}</div>`
           : (note ? `<p class="dentry">${esc(note)}</p>` : "") + `<button type="button" class="linkbtn" data-jedit="${k}" style="align-self:flex-start">${note?"Edit entry":"+ Add an entry"}</button>`}
         ${ss.length ? `<ul class="sess">${ss.map(sessHTML).join("")}</ul>` : ""}
-        <div class="row" style="border-top:1px dashed var(--line);padding-top:10px">
-          ${confirmDay===k
-            ? `<span class="note">Removes ${ss.length} ${ss.length===1?"session":"sessions"}${note?" and the entry":""}${t3.length?" and the 3 things":""}, and takes their hours off your goals.</span>
-               <button type="button" class="danger" data-dayyes="${k}">Delete day</button><button type="button" class="ghost" data-dayno="1">Keep</button>`
-            : `<button type="button" class="ghost" data-daydel="${k}">Delete this day…</button>`}
-        </div>
       </div>
     </details>`;
   }).join("") + `</div>`;
@@ -873,14 +846,6 @@ $("list").addEventListener("click", ev=>{
     if (it){ it.done = !it.done; persist(); }
     return render();
   }
-  if ((b = pick("[data-daydel]"))){ confirmDay = b.dataset.daydel; return render(); }
-  if ((b = pick("[data-dayno]"))){ confirmDay = null; return render(); }
-  if ((b = pick("[data-dayyes]"))){
-    const k = b.dataset.dayyes;
-    removeSessions(state.sessions.filter(s=>dayKey(s.at)===k));
-    delete state.days[k]; openDays.delete(k);
-    persist(); toast("Day deleted"); confirmDay = null; return render();
-  }
   if ((b = pick("[data-jdelentry]"))){ saveDay(b.dataset.jdelentry, ""); editingDay = null; return render(); }
   const je = ev.target.closest("[data-jedit]"); if (je){ editingDay = je.dataset.jedit; render(); const t=$("jText"); if(t) t.focus(); return; }
   const jc = ev.target.closest("[data-jcancel]"); if (jc){ editingDay = null; render(); return; }
@@ -1034,42 +999,10 @@ $("runStop").onclick=()=>{
 
 /* ---------- backup ---------- */
 $("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; };
-$("exportBtn").onclick=()=>{
-  const blob = new Blob([JSON.stringify({app:"hour-budget",version:3,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = "hour-budget-backup-" + dayKey(Date.now()) + ".json";
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  toast("Backup saved to your downloads");
-};
-$("importBtn").onclick=()=>$("importFile").click();
-$("importFile").onchange=async ev=>{
-  const f = ev.target.files[0]; ev.target.value=""; if(!f) return;
-  try{
-    const data = JSON.parse(await f.text());
-    if (!data || typeof data.goals!=="object") throw 0;
-    pendingImport = data;
-    $("importText").textContent = "This backup has " + Object.keys(data.goals).length + " goals, " + Object.keys(data.folders||{}).length + " folders and " + (data.sessions||[]).length + " sessions. Restoring replaces what's on this phone.";
-    $("importConfirm").hidden=false;
-  }catch(e){ toast("That file isn't an Hour Budget backup."); }
-};
-$("importYes").onclick=()=>{
-  try { localStorage.setItem(KEY, JSON.stringify(pendingImport)); } catch(e){}
-  state = load(); pendingImport=null; $("importConfirm").hidden=true; persist(); go(null); toast("Backup restored");
-};
-$("importNo").onclick=()=>{ pendingImport=null; $("importConfirm").hidden=true; };
 
 /* ---------- journal editing helpers ---------- */
 $("list").addEventListener("input", ev=>{
 });
-$("clearBtn").onclick=()=>{ $("clearBtn").hidden=true; $("clearConfirm").hidden=false; };
-$("clearNo").onclick=()=>{ $("clearBtn").hidden=false; $("clearConfirm").hidden=true; };
-$("clearYes").onclick=()=>{
-  Object.values(state.goals).forEach(g=>{ g.doneMs = 0; g.runningSince = null; });
-  state.sessions = []; state.days = {}; openDays.clear();
-  editingSession = null; confirmSess = null; confirmDay = null; editingDay = null;
-  persist(); $("clearBtn").hidden=false; $("clearConfirm").hidden=true; $("menu").hidden=true;
-  toast("Journal cleared. Fresh start."); render(); wake();
-};
 
 /* ---------- install ---------- */
 let deferred = null;
