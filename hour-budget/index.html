@@ -114,14 +114,63 @@ input.num{width:72px;font-family:var(--mono)}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .primary{flex:1}
 select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;width:100%}
+header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 12px}
+.hello{display:contents}
+.hello .eyebrow{grid-column:1;grid-row:1}
+.hright{grid-column:2;grid-row:1}
+.hello h1{grid-column:1/-1;grid-row:2;font-size:28px;text-wrap:balance}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.navbtn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:6px 12px;color:var(--ink)}
+.navbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+.today{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.today .trow{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.today .tbig{font-family:var(--mono);font-size:30px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.today .tmeta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.today .week-line{font-size:14px;border-top:1px dashed var(--line);padding-top:10px}
+.entry{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;border-left:3px solid var(--accent-soft);padding-left:10px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;min-height:96px;resize:vertical}
+textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.linkbtn{border:0;padding:4px 0;min-height:32px;color:var(--accent);font-weight:500;background:none}
+.human{font-size:13px;color:var(--muted);margin-top:-6px}
+.chip{display:inline-block;font-family:var(--mono);font-size:12px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted);font-variant-numeric:tabular-nums}
+.chip.hi{border-color:var(--accent);color:var(--accent)}
+.chip.lo{border-color:var(--danger);color:var(--danger)}
+/* rating sheet */
+.scrim{position:fixed;inset:0;background:rgba(10,16,14,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.rate{background:var(--surface);color:var(--ink);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow:auto}
+.rate h2{font-family:var(--display);font-weight:500;font-size:21px;margin:0}
+.rate .what{font-size:14px;color:var(--muted);margin:-8px 0 0}
+.score{display:flex;align-items:baseline;gap:10px}
+.score b{font-family:var(--mono);font-size:44px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;min-width:3ch}
+.score span{font-size:14px;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:0;border:0;background:none}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-8px}
+/* journal */
+.days{display:flex;flex-direction:column;gap:8px}
+details.day{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+details.day summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:52px}
+details.day summary::-webkit-details-marker{display:none}
+details.day summary .dname{font-weight:600}
+details.day summary .dsum{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center}
+details.day[open] summary{border-bottom:1px dashed var(--line)}
+.dbody{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.sess{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.sess li{display:flex;flex-direction:column;gap:2px}
+.sess .sl{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}
+.sess .sl span:first-child{overflow-wrap:anywhere}
+.sess .sn{font-size:13px;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
+.dentry{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Hour Budget</h1>
+    <div class="hello">
+      <span class="eyebrow" id="dateLine"></span>
+      <h1 id="greeting">Hello</h1>
+    </div>
     <div class="hright">
-      <div class="week"><div class="lbl">Last 7 days</div><div class="val" id="weekTotal">0h 00m</div></div>
+      <button type="button" class="navbtn" id="journalBtn" aria-label="Open journal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>Journal</button>
       <button type="button" class="iconbtn ghost" id="menuBtn" aria-label="Settings and backup" aria-expanded="false">⋯</button>
     </div>
   </header>
@@ -132,8 +181,11 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
   </div>
 
   <section class="sheet" id="menu" hidden>
+    <h2>Settings</h2>
+    <label class="field"><span>Your name</span><input id="nameInput" maxlength="40" placeholder="Emmanuel" autocomplete="given-name"></label>
+    <div class="row"><button type="button" id="nameSave">Save name</button></div>
     <h2>Backup</h2>
-    <p class="note">Your goals live on this device only. Save a backup file now and then, and use it to move your data to a new phone.</p>
+    <p class="note">Everything lives on this device only. Save a backup file now and then, and use it to move your data to a new phone.</p>
     <div class="row">
       <button type="button" id="exportBtn">Save backup file</button>
       <button type="button" id="importBtn">Restore from backup</button>
@@ -141,12 +193,37 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
     </div>
     <div class="row" id="importConfirm" hidden>
       <span class="note" id="importText"></span>
-      <button type="button" class="danger" id="importYes">Replace my goals</button>
+      <button type="button" class="danger" id="importYes">Replace my data</button>
       <button type="button" class="ghost" id="importNo">Cancel</button>
     </div>
   </section>
 
-  <!-- folder header (only inside a folder) -->
+  <!-- today (home only) -->
+  <section class="today" id="todayCard">
+    <div class="trow">
+      <div>
+        <div class="eyebrow">Today</div>
+        <div class="tbig" id="todayTotal">0h 00m</div>
+      </div>
+      <div class="tmeta" id="todayMeta"></div>
+    </div>
+    <div id="nameAsk" class="row" hidden>
+      <label for="nameFirst" class="note">What should I call you?</label>
+      <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
+      <button type="button" id="nameFirstSave">Save</button>
+    </div>
+    <div id="entryView"></div>
+    <div id="entryEdit" hidden>
+      <textarea id="entryText" maxlength="4000" placeholder="What did you do today? How did it go?"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="primary" id="entrySave" style="flex:0;min-width:120px">Save</button>
+        <button type="button" class="ghost" id="entryCancel">Cancel</button>
+      </div>
+    </div>
+    <div class="week-line" id="weekLine"></div>
+  </section>
+
+  <!-- sub-page header -->
   <div class="crumb" id="crumb" hidden>
     <button type="button" class="ghost" id="backBtn" aria-label="Back to all">‹ All</button>
     <h2 id="folderTitle"></h2>
@@ -201,21 +278,49 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 
   <div class="list" id="list"></div>
 </div>
+
+<!-- rating sheet -->
+<div class="scrim" id="rateScrim" hidden>
+  <section class="rate" role="dialog" aria-modal="true" aria-labelledby="rateTitle">
+    <h2 id="rateTitle">How was this session?</h2>
+    <p class="what" id="rateWhat"></p>
+    <div class="score"><b id="rateNum">50</b><span id="rateWord">okay</span></div>
+    <input type="range" id="rateRange" min="0" max="100" step="1" value="50" aria-label="Productivity and satisfaction from 0 to 100">
+    <div class="scale"><span>0 · wasted</span><span>100 · excellent</span></div>
+    <label class="field"><span>How did it feel? What could be better? (optional)</span>
+      <textarea id="rateNote" maxlength="600" placeholder="Focused after the first 20 min. Phone was a distraction."></textarea></label>
+    <button type="button" class="primary" id="rateSave">Save rating</button>
+  </section>
+</div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
 (function(){
-const H = 3600000, DAY = 86400000, KEY = "hourbudget.v1";
+const H = 3600000, DAY = 86400000, KEY = "hourbudget.v1", WAKE_H = 16;
 const $ = id => document.getElementById(id);
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 let state = load();
-let current = folderFromHash();   // null = home, else folder id
+let route = parseHash();          // {view:"home"|"folder"|"journal", id}
 let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
+let ratingId = null, editingDay = null;
 
 /* ---------- storage ---------- */
+function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}}; }
 function load(){
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.goals){ s.folders = s.folders || {}; return s; } } catch(e){}
-  return {goals:{}, folders:{}};
+  let s;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
+  if (!s || !s.goals) return blank();
+  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {};
+  // migrate per-goal logs into the shared session list
+  Object.entries(s.goals).forEach(([gid,g])=>{
+    if (Array.isArray(g.log)){
+      g.log.forEach(e=>s.sessions.push({id:"s"+e.at.toString(36)+Math.random().toString(36).slice(2,5), goalId:gid, goalName:g.name, at:e.at, ms:e.ms, src:e.src==="manual"&&e.ms<0?"correction":e.src}));
+      delete g.log;
+    }
+  });
+  s.sessions.sort((a,b)=>a.at-b.at);
+  return s;
 }
 function persist(){
   try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
@@ -225,94 +330,165 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
 /* ---------- navigation ---------- */
-function folderFromHash(){
+function parseHash(){
+  if (location.hash === "#journal") return {view:"journal"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
-  return m ? m[1] : null;
+  return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
-function go(fid){
-  if (fid) location.hash = "f-" + fid;
-  else history.replaceState(null, "", location.pathname + location.search), onNav();
+function go(hash){
+  if (hash) location.hash = hash;
+  else { history.replaceState(null, "", location.pathname + location.search); onNav(); }
 }
 function onNav(){
-  current = folderFromHash();
-  if (current && !state.folders[current]) current = null;
+  route = parseHash();
+  if (route.view==="folder" && !state.folders[route.id]) route = {view:"home"};
   openPanel = null; confirmDelete = null;
-  closeForm(); closeFolderForm();
+  closeForm(); closeFolderForm(); closeEntry();
   render(); window.scrollTo(0,0);
 }
 window.addEventListener("hashchange", onNav);
 
 /* ---------- formatting ---------- */
+const pad = n => String(n).padStart(2,"0");
 function hm(ms){
   const neg = ms < 0; ms = Math.abs(ms);
   const m = Math.floor(ms/60000), h = Math.floor(m/60), mm = m%60;
-  return (neg?"−":"") + h + "h " + String(mm).padStart(2,"0") + "m";
+  return (neg?"−":"") + h + "h " + pad(mm) + "m";
 }
-function clock(ms){
-  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor(s/60)%60, ss = s%60;
-  return h + ":" + String(m).padStart(2,"0") + ":" + String(ss).padStart(2,"0");
-}
+function clock(ms){ const s=Math.floor(ms/1000); return Math.floor(s/3600)+":"+pad(Math.floor(s/60)%60)+":"+pad(s%60); }
+function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function keyDate(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d); }
 function dateLabel(iso){
   const d = new Date(iso+"T00:00:00");
   return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:d.getFullYear()!==new Date().getFullYear()?"numeric":undefined});
 }
-function when(ts){
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"}) + " · " + d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
-}
+function timeOf(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+function chip(r){ if (r==null) return ""; return `<span class="chip ${r>=70?"hi":r<40?"lo":""}">${r}</span>`; }
+function word(r){ return r>=90?"excellent":r>=75?"really good":r>=60?"good":r>=45?"okay":r>=25?"weak":"wasted"; }
 
 /* ---------- derived ---------- */
+function allGoals(){ return Object.entries(state.goals).map(([id,g])=>({id,...g})); }
 function goalsIn(fid){
-  return Object.entries(state.goals).map(([id,g])=>({id,...g}))
-    .filter(g => fid ? g.folderId===fid : !(g.folderId && state.folders[g.folderId]))
+  return allGoals().filter(g => fid ? g.folderId===fid : !(g.folderId && state.folders[g.folderId]))
     .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 }
-function allGoals(){ return Object.entries(state.goals).map(([id,g])=>({id,...g})); }
 function folders(){ return Object.entries(state.folders).map(([id,f])=>({id,...f})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); }
 function doneNow(g){ return (g.doneMs||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
-function weekOf(goals){
-  const now = Date.now(); let w = 0;
-  goals.forEach(g=>{ (g.log||[]).forEach(e=>{ if(now-e.at<7*DAY) w+=e.ms; }); if(g.runningSince) w+=now-g.runningSince; });
-  return Math.max(0,w);
+function running(){ return allGoals().find(g=>g.runningSince); }
+function sumSince(from, goalIds){
+  let t = 0;
+  state.sessions.forEach(s=>{ if (s.at>=from && (!goalIds || goalIds.has(s.goalId))) t += s.ms; });
+  const r = running(); if (r && (!goalIds || goalIds.has(r.id))) t += Date.now() - Math.max(from, r.runningSince);
+  return Math.max(0,t);
+}
+function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function weightedAvg(list){
+  let w=0, s=0; list.forEach(x=>{ if (x.rating!=null && x.ms>0){ w+=x.ms; s+=x.rating*x.ms; } });
+  return w ? Math.round(s/w) : null;
 }
 
 /* ---------- render ---------- */
 function render(){
-  $("weekTotal").textContent = hm(weekOf(allGoals()));
-  const running = allGoals().find(g=>g.runningSince);
-  document.title = running ? "● " + clock(Date.now()-running.runningSince) + " · " + running.name : "Hour Budget";
+  const name = (state.settings.name||"").trim();
+  const hr = new Date().getHours();
+  const hi = hr<5 ? "Still up" : hr<12 ? "Good morning" : hr<18 ? "Good afternoon" : "Good evening";
+  $("greeting").textContent = name ? hi + ", " + name : hi;
+  $("dateLine").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  const r = running();
+  document.title = r ? "● " + clock(Date.now()-r.runningSince) + " · " + r.name : "Hour Budget";
 
-  const inFolder = !!current;
-  $("crumb").hidden = !inFolder; $("folderStats").hidden = !inFolder;
-  $("addFolderBtn").hidden = inFolder;
-  $("addBtn").textContent = inFolder ? "+ New goal in " + state.folders[current].name : "+ New goal";
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal";
+  $("todayCard").hidden = !home;
+  $("crumb").hidden = home; $("folderStats").hidden = home;
+  $("folderEditBtn").hidden = !folder;
+  $("addRow").hidden = journal || !$("form").hidden || !$("folderForm").hidden;
+  $("addFolderBtn").hidden = !home;
+  $("journalBtn").hidden = journal;
 
-  if (inFolder){
-    const gs = goalsIn(current);
-    $("folderTitle").textContent = state.folders[current].name;
+  if (home) renderToday();
+  if (journal) return renderJournal();
+
+  if (folder){
+    const f = state.folders[route.id], gs = goalsIn(route.id);
+    $("addBtn").textContent = "+ New goal in " + f.name;
+    $("folderTitle").textContent = f.name;
+    const ids = new Set(gs.map(g=>g.id));
     const total = gs.reduce((s,g)=>s+doneNow(g),0);
-    $("folderStats").textContent = gs.length + (gs.length===1?" goal":" goals") + " · " + hm(total) + " logged · " + hm(weekOf(gs)) + " in the last 7 days";
+    $("folderStats").textContent = gs.length + (gs.length===1?" goal":" goals") + " · " + hm(total) + " logged · " + hm(sumSince(Date.now()-7*DAY, ids)) + " in the last 7 days";
     $("list").innerHTML = gs.length ? gs.map(cardHTML).join("")
-      : `<div class="empty"><h2>This folder is empty</h2><p>Tap “New goal” to add the first goal to ${esc(state.folders[current].name)}.</p></div>`;
+      : `<div class="empty"><h2>This folder is empty</h2><p>Tap “New goal” to add the first goal to ${esc(f.name)}.</p></div>`;
     return;
   }
 
+  $("addBtn").textContent = "+ New goal";
   const fs = folders(), loose = goalsIn(null);
   if (!fs.length && !loose.length){
     $("list").innerHTML = `<div class="empty"><h2>Give your time a budget</h2><p>Make folders like “Maths” or “Piano”, put goals inside like “Analysis 1 · 100 hours”, and start the timer while you work.</p></div>`;
     return;
   }
   let html = "";
-  if (fs.length){
-    html += `<p class="section-lbl">Folders</p>` + fs.map(folderHTML).join("");
-  }
-  if (loose.length){
-    if (fs.length) html += `<p class="section-lbl">Other goals</p>`;
-    html += loose.map(cardHTML).join("");
-  }
+  if (fs.length) html += `<p class="section-lbl">Folders</p>` + fs.map(folderHTML).join("");
+  if (loose.length){ if (fs.length) html += `<p class="section-lbl">Other goals</p>`; html += loose.map(cardHTML).join(""); }
   $("list").innerHTML = html;
+}
+
+function renderToday(){
+  const t0 = startOfToday();
+  const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
+  const total = sumSince(t0);
+  $("todayTotal").textContent = hm(total);
+  const avg = weightedAvg(today);
+  const n = today.length + (running() ? 1 : 0);
+  $("todayMeta").innerHTML = n ? `${n} ${n===1?"session":"sessions"}${avg!=null?` · rated ${chip(avg)} on average`:""}` : "Nothing logged yet";
+  $("nameAsk").hidden = !!(state.settings.name||"").trim();
+  const week = sumSince(Date.now()-7*DAY);
+  const pct = week / (7*WAKE_H*H) * 100;
+  $("weekLine").textContent = week
+    ? "Last 7 days: " + hm(week) + ", " + (pct<1 ? "under 1%" : Math.round(pct) + "%") + " of your waking hours."
+    : "Last 7 days: nothing logged yet.";
+  if ($("entryEdit").hidden){
+    const e = state.days[dayKey(Date.now())];
+    $("entryView").innerHTML = e && e.note
+      ? `<p class="entry">${esc(e.note)}</p><button type="button" class="linkbtn" data-entry="${dayKey(Date.now())}">Edit today's entry</button>`
+      : `<button type="button" class="linkbtn" data-entry="${dayKey(Date.now())}">+ Write about today</button>`;
+  }
+}
+
+function renderJournal(){
+  $("folderTitle").textContent = "Journal";
+  const byDay = {};
+  state.sessions.forEach(s=>{ const k=dayKey(s.at); (byDay[k]=byDay[k]||[]).push(s); });
+  Object.keys(state.days).forEach(k=>{ if (state.days[k].note) byDay[k]=byDay[k]||[]; });
+  const keys = Object.keys(byDay).sort().reverse();
+  $("folderStats").textContent = keys.length ? keys.length + (keys.length===1?" day":" days") + " so far. Tap a day to open it." : "";
+  if (!keys.length){
+    $("list").innerHTML = `<div class="empty"><h2>Your journal is empty</h2><p>Every session you rate and every note you write shows up here, one tab per day.</p></div>`;
+    return;
+  }
+  const todayK = dayKey(Date.now());
+  $("list").innerHTML = `<div class="days">` + keys.map(k=>{
+    const ss = byDay[k].slice().sort((a,b)=>a.at-b.at), work = ss.filter(s=>s.ms>0);
+    const tot = ss.reduce((a,s)=>a+s.ms,0), avg = weightedAvg(work);
+    const d = keyDate(k);
+    const label = k===todayK ? "Today" : d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:d.getFullYear()!==new Date().getFullYear()?"numeric":undefined});
+    const note = state.days[k] && state.days[k].note;
+    const editing = editingDay===k;
+    return `<details class="day"${editing?" open":""}>
+      <summary><span class="dname">${label}</span><span class="dsum">${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
+      <div class="dbody">
+        ${editing
+          ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
+             <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button></div>`
+          : (note ? `<p class="dentry">${esc(note)}</p>` : "") + `<button type="button" class="linkbtn" data-jedit="${k}" style="align-self:flex-start">${note?"Edit entry":"+ Add an entry"}</button>`}
+        ${ss.length ? `<ul class="sess">${ss.map(s=>`<li>
+            <div class="sl"><span>${timeOf(s.at)} · ${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":s.src==="manual"?" · added":""}</span><span>${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></div>
+            ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
+          </li>`).join("")}</ul>` : ""}
+      </div>
+    </details>`;
+  }).join("") + `</div>`;
 }
 
 function folderHTML(f){
@@ -331,7 +507,7 @@ function folderHTML(f){
 }
 
 function cardHTML(g){
-  const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", running = !!g.runningSince;
+  const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince;
   let big, sub, pct = null, finished = false;
   if (down){
     const rem = Math.ceil(Math.max(0,target-done)/60000)*60000; finished = rem===0;
@@ -341,7 +517,7 @@ function cardHTML(g){
     big = hm(done); sub = target ? "of " + g.targetH + " h" : "logged";
     if (target){ pct = Math.min(100,done/target*100); finished = done>=target; }
   }
-  let paceTxt = "", late = false;
+  let paceTxt = "", late = false, human = "";
   if (g.deadline){
     const end = new Date(g.deadline+"T23:59:59").getTime();
     const daysLeft = Math.ceil((end-Date.now())/DAY);
@@ -349,24 +525,34 @@ function cardHTML(g){
     if (daysLeft < 0){ paceTxt = "Deadline passed (" + dateLabel(g.deadline) + ")"; late = remH!==0; }
     else if (remH===null) paceTxt = daysLeft + " days left · until " + dateLabel(g.deadline);
     else if (remH===0) paceTxt = "Reached before " + dateLabel(g.deadline);
-    else { const pd = remH/Math.max(1,daysLeft); paceTxt = "≈ " + (pd<10?pd.toFixed(1):Math.round(pd)) + " h/day · " + daysLeft + " days to " + dateLabel(g.deadline); late = pd>8; }
+    else {
+      const pd = remH/Math.max(1,daysLeft);
+      paceTxt = "≈ " + (pd<10?pd.toFixed(1):Math.round(pd)) + " h/day · " + daysLeft + " days to " + dateLabel(g.deadline);
+      late = pd>8;
+      const share = remH / (Math.max(1,daysLeft)*WAKE_H);
+      const every = Math.round(1/share);
+      human = "That's " + (share*100<1 ? "under 1%" : Math.round(share*100) + "%") + " of your waking time until then" + (every>1 && every<200 ? ", about 1 hour in every " + every + "." : ".");
+    }
   }
-  const open = openPanel===g.id, recent = (g.log||[]).slice(-5).reverse();
-  return `<article class="goal${running?" running":""}${finished?" done-goal":""}" data-id="${g.id}">
+  const rated = state.sessions.filter(s=>s.goalId===g.id && s.ms>0);
+  const avg = weightedAvg(rated);
+  const open = openPanel===g.id, recent = state.sessions.filter(s=>s.goalId===g.id).slice(-5).reverse();
+  return `<article class="goal${isRun?" running":""}${finished?" done-goal":""}" data-id="${g.id}">
     <div class="top"><h3 class="name">${esc(g.name)}</h3><span class="mode">${down?"Countdown":"Tally"}</span></div>
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
-    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span>${hm(done)} total</span>`}${running?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
+    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span>${hm(done)} total${avg!=null?" · avg "+avg:""}</span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
+    ${human?`<div class="human">${human}</div>`:""}
     <div class="actions">
-      ${running?`<button type="button" class="primary stop" data-act="stop">Stop · save session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
+      ${isRun?`<button type="button" class="primary stop" data-act="stop">Stop · rate session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
     </div>
     ${open?`<div class="panel">
       <div class="row"><label for="h-${g.id}">Worked without the timer:</label>
         <input class="num" id="h-${g.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0" aria-label="hours"><span class="note">h</span>
         <input class="num" id="m-${g.id}" type="number" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="minutes"><span class="note">min</span></div>
-      <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Remove time</button></div>
-      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${when(e.at)}${e.src==="manual"?" · manual":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)}</b></li>`).join("")}</ul></div>`:""}
+      <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Correct (remove)</button></div>
+      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions${avg!=null?" · average rating "+avg:""}</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})} · ${timeOf(e.at)}${e.src==="correction"?" · correction":e.src==="manual"?" · added":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
       <div class="row"><button type="button" class="ghost" data-act="edit">Edit / move</button>
         ${confirmDelete===g.id?`<button type="button" class="danger" data-act="delete-yes">Delete for good</button><button type="button" class="ghost" data-act="delete-no">Keep</button>`:`<button type="button" class="ghost" data-act="delete">Delete…</button>`}</div>
     </div>`:""}
@@ -374,37 +560,69 @@ function cardHTML(g){
 }
 
 setInterval(()=>{
-  const r = allGoals().find(g=>g.runningSince); if (!r) return;
+  const r = running(); if (!r) return;
   const t = clock(Date.now()-r.runningSince);
   const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = "● " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
   document.title = "● " + t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && $("rateScrim").hidden) render();
 },1000);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ state = load(); render(); wake(); } });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden){ state = load(); render(); wake(); nextRating(); } });
 
-/* ---------- wake lock while timing ---------- */
+/* ---------- wake lock ---------- */
 let lock = null;
 async function wake(){
-  const running = allGoals().some(g=>g.runningSince);
+  const on = !!running();
   try{
-    if (running && !lock && "wakeLock" in navigator){ lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release",()=>lock=null); }
-    else if (!running && lock){ await lock.release(); lock = null; }
+    if (on && !lock && "wakeLock" in navigator){ lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release",()=>lock=null); }
+    else if (!on && lock){ await lock.release(); lock = null; }
   }catch(e){ lock = null; }
 }
 
-/* ---------- goal actions ---------- */
-function pushLog(g,ms,src){ return (g.log||[]).concat([{at:Date.now(),ms,src}]).slice(-500); }
-function stopGoal(id){
-  const g = state.goals[id]; if (!g || !g.runningSince) return 0;
-  const ms = Date.now()-g.runningSince;
-  g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
-  if (ms >= 60000) g.log = pushLog(g,ms,"timer");
-  return ms;
+/* ---------- sessions & rating ---------- */
+function addSession(g, gid, ms, src, at){
+  const s = {id:newId("s"), goalId:gid, goalName:g.name, at:at||Date.now(), ms, src, rating: ms>0 ? null : undefined};
+  state.sessions.push(s);
+  if (state.sessions.length > 8000) state.sessions = state.sessions.slice(-8000);
+  return s;
 }
+function stopGoal(id){
+  const g = state.goals[id]; if (!g || !g.runningSince) return null;
+  const start = g.runningSince, ms = Date.now()-start;
+  g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
+  return ms >= 60000 ? addSession(g, id, ms, "timer", start) : 0;
+}
+function nextRating(){
+  if (!$("rateScrim").hidden) return;
+  const p = state.sessions.find(s=>s.rating===null);
+  if (p) openRating(p.id);
+}
+function openRating(sid){
+  const s = state.sessions.find(x=>x.id===sid); if (!s) return;
+  ratingId = sid;
+  $("rateWhat").textContent = (s.goalName||"Goal") + " · " + hm(s.ms) + " · " + timeOf(s.at);
+  $("rateRange").value = 50; $("rateNote").value = ""; updateRate();
+  $("rateScrim").hidden = false; document.body.style.overflow = "hidden";
+  $("rateRange").focus();
+}
+function updateRate(){ const v = +$("rateRange").value; $("rateNum").textContent = v; $("rateWord").textContent = word(v); }
+$("rateRange").addEventListener("input", updateRate);
+$("rateSave").onclick = ()=>{
+  const s = state.sessions.find(x=>x.id===ratingId);
+  if (s){ s.rating = +$("rateRange").value; const n = $("rateNote").value.trim(); if (n) s.note = n; }
+  persist(); ratingId = null;
+  $("rateScrim").hidden = true; document.body.style.overflow = "";
+  toast("Saved to your journal");
+  render(); nextRating();
+};
+
+/* ---------- goal actions ---------- */
 $("list").addEventListener("click", ev=>{
   const fb = ev.target.closest("button[data-folder]");
-  if (fb){ go(fb.dataset.folder); return; }
+  if (fb){ go("f-" + fb.dataset.folder); return; }
+  const je = ev.target.closest("[data-jedit]"); if (je){ editingDay = je.dataset.jedit; render(); const t=$("jText"); if(t) t.focus(); return; }
+  const jc = ev.target.closest("[data-jcancel]"); if (jc){ editingDay = null; render(); return; }
+  const js = ev.target.closest("[data-jsave]"); if (js){ saveDay(js.dataset.jsave, $("jText").value); editingDay = null; render(); return; }
   const btn = ev.target.closest("button[data-act]"); if(!btn) return;
   const id = btn.closest(".goal").dataset.id, g = state.goals[id]; if(!g) return;
   const act = btn.dataset.act;
@@ -416,20 +634,46 @@ $("list").addEventListener("click", ev=>{
     Object.keys(state.goals).forEach(k=>{ if(k!==id) stopGoal(k); });
     g.runningSince = Date.now();
   } else if (act==="stop"){
-    const ms = stopGoal(id);
-    toast(ms>=60000 ? "Saved " + hm(ms) + " to " + g.name : "Under a minute, not logged");
+    const s = stopGoal(id);
+    if (!s) toast("Under a minute, not logged");
   } else if (act==="add"||act==="sub"){
     const h = parseFloat($("h-"+id).value)||0, m = parseFloat($("m-"+id).value)||0;
     let ms = Math.round((h*60+m)*60000);
     if (ms<=0) return toast("Enter hours or minutes first.");
-    if (act==="sub"){ ms = -Math.min(ms,g.doneMs||0); if(ms===0) return toast("Nothing to remove yet."); }
-    g.doneMs = Math.max(0,(g.doneMs||0)+ms); g.log = pushLog(g,ms,"manual");
-    toast((ms>0?"Added ":"Removed ") + hm(Math.abs(ms)));
+    if (act==="sub"){
+      ms = -Math.min(ms,g.doneMs||0); if(ms===0) return toast("Nothing to remove yet.");
+      g.doneMs = Math.max(0,(g.doneMs||0)+ms); addSession(g,id,ms,"correction");
+      toast("Removed " + hm(-ms));
+    } else {
+      g.doneMs = (g.doneMs||0)+ms; addSession(g,id,ms,"manual");
+    }
   } else if (act==="delete-yes"){
-    delete state.goals[id]; openPanel=null; confirmDelete=null; toast("Goal deleted");
+    delete state.goals[id]; openPanel=null; confirmDelete=null; toast("Goal deleted. Its sessions stay in your journal.");
   }
-  persist(); render(); wake();
+  persist(); render(); wake(); nextRating();
 });
+
+/* ---------- daily entry ---------- */
+function saveDay(k, text){
+  const t = (text||"").trim();
+  if (t) state.days[k] = {note:t, updatedAt:Date.now()}; else delete state.days[k];
+  persist(); toast(t ? "Entry saved" : "Entry removed");
+}
+$("todayCard").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-entry]"); if (!b) return;
+  const e = state.days[b.dataset.entry];
+  $("entryText").value = e ? e.note : "";
+  $("entryView").hidden = true; $("entryEdit").hidden = false; $("entryText").focus();
+});
+function closeEntry(){ $("entryEdit").hidden = true; $("entryView").hidden = false; }
+$("entryCancel").onclick = ()=>{ closeEntry(); render(); };
+$("entrySave").onclick = ()=>{ saveDay(dayKey(Date.now()), $("entryText").value); closeEntry(); render(); };
+
+/* ---------- name ---------- */
+function setName(n){ state.settings.name = n.trim(); persist(); render(); }
+$("nameFirstSave").onclick = ()=>{ const n=$("nameFirst").value.trim(); if(!n) return toast("Type your name first."); setName(n); };
+$("nameFirst").addEventListener("keydown",e=>{ if(e.key==="Enter") $("nameFirstSave").click(); });
+$("nameSave").onclick = ()=>{ setName($("nameInput").value); toast("Name saved"); };
 
 /* ---------- goal form ---------- */
 function setMode(m){
@@ -443,10 +687,9 @@ $("chips").addEventListener("click",ev=>{
   const [n,m,h] = b.dataset.t.split("|"); $("fName").value=n; setMode(m); $("fHours").value=h; $("fName").select();
 });
 function fillFolderSelect(selected){
-  const opts = [`<option value="">No folder</option>`]
+  $("fFolder").innerHTML = [`<option value="">No folder</option>`]
     .concat(folders().map(f=>`<option value="${f.id}">${esc(f.name)}</option>`))
-    .concat([`<option value="__new">+ New folder…</option>`]);
-  $("fFolder").innerHTML = opts.join("");
+    .concat([`<option value="__new">+ New folder…</option>`]).join("");
   $("fFolder").value = selected && state.folders[selected] ? selected : "";
   $("fNewFolderWrap").hidden = true; $("fNewFolder").value = "";
 }
@@ -458,13 +701,13 @@ function openForm(id){
   $("saveBtn").textContent = g ? "Save changes" : "Save goal";
   $("chips").hidden = !!g;
   $("fName").value = g ? g.name : ""; $("fHours").value = g && g.targetH ? g.targetH : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
-  fillFolderSelect(g ? g.folderId : current);
+  fillFolderSelect(g ? g.folderId : (route.view==="folder" ? route.id : null));
   setMode(g ? g.mode : "down");
   $("form").hidden=false; $("addRow").hidden=true; $("menu").hidden=true;
   $("form").scrollIntoView({behavior:"smooth",block:"start"});
 }
-function closeForm(){ $("form").hidden=true; $("addRow").hidden=false; editingId=null; }
-$("addBtn").onclick=()=>openForm(null); $("cancelBtn").onclick=closeForm;
+function closeForm(){ $("form").hidden=true; editingId=null; if (route.view!=="journal") $("addRow").hidden=false; }
+$("addBtn").onclick=()=>openForm(null); $("cancelBtn").onclick=()=>{ closeForm(); render(); };
 $("form").addEventListener("submit",ev=>{
   ev.preventDefault();
   const name = $("fName").value.trim(), hrs = parseFloat($("fHours").value);
@@ -477,13 +720,14 @@ $("form").addEventListener("submit",ev=>{
     folderId = newId("f"); state.folders[folderId] = {name:fname, createdAt:Date.now()};
   }
   const id = editingId || newId("g");
-  const base = state.goals[id] || {doneMs:0,runningSince:null,log:[],createdAt:Date.now()};
+  const base = state.goals[id] || {doneMs:0,runningSince:null,createdAt:Date.now()};
+  const wasEditing = !!editingId, moved = wasEditing && base.folderId !== folderId;
   state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null};
-  const moved = editingId && base.folderId !== folderId;
+  if (wasEditing) state.sessions.forEach(s=>{ if (s.goalId===id) s.goalName = name; });
   if (persist()){
-    toast(editingId ? (moved ? "Goal moved" : "Goal updated") : "Goal added");
+    toast(wasEditing ? (moved ? "Goal moved" : "Goal updated") : "Goal added");
     closeForm();
-    if (!editingId && folderId && folderId!==current) go(folderId); else render();
+    if (!wasEditing && folderId && !(route.view==="folder" && route.id===folderId)) go("f-" + folderId); else render();
   }
 });
 
@@ -497,14 +741,14 @@ function openFolderForm(fid){
   $("folderForm").hidden = false; $("addRow").hidden = true; $("menu").hidden = true;
   $("folderName").focus();
 }
-function closeFolderForm(){ $("folderForm").hidden = true; $("addRow").hidden = false; editingFolder = null; }
+function closeFolderForm(){ $("folderForm").hidden = true; editingFolder = null; if (route.view!=="journal") $("addRow").hidden = false; }
 $("addFolderBtn").onclick=()=>openFolderForm(null);
-$("folderEditBtn").onclick=()=>openFolderForm(current);
-$("folderCancel").onclick=closeFolderForm;
+$("folderEditBtn").onclick=()=>openFolderForm(route.id);
+$("folderCancel").onclick=()=>{ closeFolderForm(); render(); };
 $("folderSave").onclick=()=>{
   const name = $("folderName").value.trim(); if(!name) return toast("Give the folder a name.");
   if (editingFolder){ state.folders[editingFolder].name = name; persist(); toast("Folder renamed"); closeFolderForm(); render(); }
-  else { const id = newId("f"); state.folders[id] = {name, createdAt:Date.now()}; persist(); toast("Folder created"); closeFolderForm(); go(id); }
+  else { const id = newId("f"); state.folders[id] = {name, createdAt:Date.now()}; persist(); toast("Folder created"); closeFolderForm(); go("f-" + id); }
 };
 $("folderName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("folderSave").click(); } });
 $("folderDelete").onclick=()=>{ $("folderDelete").hidden=true; $("folderDeleteYes").hidden=false; $("folderDeleteNote").hidden=false; };
@@ -513,14 +757,15 @@ $("folderDeleteYes").onclick=()=>{
   Object.values(state.goals).forEach(g=>{ if(g.folderId===fid) g.folderId=null; });
   delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go(null);
 };
-$("backBtn").onclick=()=>{ if (history.length>1 && folderFromHash()) history.back(); else go(null); };
+$("backBtn").onclick=()=>{ if (location.hash && history.length>1) history.back(); else go(null); };
+$("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
 
 /* ---------- backup ---------- */
-$("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); };
+$("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; };
 $("exportBtn").onclick=()=>{
-  const blob = new Blob([JSON.stringify({app:"hour-budget",version:2,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
+  const blob = new Blob([JSON.stringify({app:"hour-budget",version:3,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = "hour-budget-backup-" + new Date().toISOString().slice(0,10) + ".json";
+  a.download = "hour-budget-backup-" + dayKey(Date.now()) + ".json";
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   toast("Backup saved to your downloads");
 };
@@ -530,12 +775,15 @@ $("importFile").onchange=async ev=>{
   try{
     const data = JSON.parse(await f.text());
     if (!data || typeof data.goals!=="object") throw 0;
-    pendingImport = {goals:data.goals, folders:data.folders||{}};
-    $("importText").textContent = "This backup has " + Object.keys(data.goals).length + " goals and " + Object.keys(pendingImport.folders).length + " folders. Restoring replaces what's on this phone.";
+    pendingImport = data;
+    $("importText").textContent = "This backup has " + Object.keys(data.goals).length + " goals, " + Object.keys(data.folders||{}).length + " folders and " + (data.sessions||[]).length + " sessions. Restoring replaces what's on this phone.";
     $("importConfirm").hidden=false;
   }catch(e){ toast("That file isn't an Hour Budget backup."); }
 };
-$("importYes").onclick=()=>{ state=pendingImport; pendingImport=null; $("importConfirm").hidden=true; persist(); go(null); render(); toast("Backup restored"); };
+$("importYes").onclick=()=>{
+  try { localStorage.setItem(KEY, JSON.stringify(pendingImport)); } catch(e){}
+  state = load(); pendingImport=null; $("importConfirm").hidden=true; persist(); go(null); toast("Backup restored");
+};
 $("importNo").onclick=()=>{ pendingImport=null; $("importConfirm").hidden=true; };
 
 /* ---------- install ---------- */
@@ -545,8 +793,8 @@ $("installBtn").onclick=async()=>{ if(!deferred) return; deferred.prompt(); awai
 window.addEventListener("appinstalled",()=>{ $("installBar").hidden=true; });
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
-if (current && !state.folders[current]) current = null;
-render(); wake();
+if (route.view==="folder" && !state.folders[route.id]) route = {view:"home"};
+persist(); render(); wake(); nextRating();
 })();
 </script>
 </body>
