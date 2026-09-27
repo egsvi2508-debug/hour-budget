@@ -171,6 +171,18 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .gj{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .gj li{display:flex;gap:8px;align-items:flex-start}
 .gj li::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:.55em}
+.cvform{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.cvform textarea{min-height:64px}
+.cvyear{font-family:var(--display);font-weight:700;font-size:20px;margin:6px 0 -4px}
+.cvlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.cvlist li{display:grid;grid-template-columns:64px 1fr;gap:4px 14px;padding:12px 0;border-top:1px solid var(--line)}
+.cvlist li:first-child{border-top:0}
+.cvdate{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:1px}
+.cvtitle{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.cvlesson{grid-column:2;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.cvlesson::before{content:"Learned: ";font-weight:600}
+.cvactions{grid-column:2;display:flex;gap:12px}
+.cvactions button{font-size:13px;min-height:28px;padding:0}
 .homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
 .rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
 .rowlink svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
@@ -256,6 +268,7 @@ details.sitem summary .sval{white-space:nowrap}
     <h2>Settings</h2>
     <label class="field"><span>Your name</span><input id="nameInput" maxlength="40" placeholder="Emmanuel" autocomplete="given-name"></label>
     <div class="row"><button type="button" id="nameSave">Save name</button></div>
+    <button type="button" class="linkbtn" id="failuresBtn" style="align-self:flex-start;color:var(--muted);font-weight:400;font-size:14px">CV of failures ›</button>
   </section>
 
   <!-- opening page -->
@@ -414,12 +427,12 @@ document.addEventListener("toggle", e=>{
 }, true);
 
 /* ---------- storage ---------- */
-function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}}; }
+function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}, failures:[]}; }
 function load(){
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || !s.goals) return blank();
-  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {};
+  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || [];
   // migrate per-goal logs into the shared session list
   Object.entries(s.goals).forEach(([gid,g])=>{
     if (Array.isArray(g.log)){
@@ -442,6 +455,7 @@ function parseHash(){
   if (location.hash === "#journal") return {view:"journal"};
   if (location.hash === "#goals") return {view:"goals"};
   if (location.hash === "#stats") return {view:"stats"};
+  if (location.hash === "#failures") return {view:"failures"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
   return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
@@ -512,18 +526,19 @@ function render(){
   const r = running();
   document.title = r ? "● " + clock(Date.now()-r.runningSince) + " · " + r.name : "Hour Budget";
 
-  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats";
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures";
   $("homeView").hidden = !home; $("homeHeader").hidden = !home;
   if (!home){ $("menu").hidden = true; }
-  $("crumb").hidden = home; $("folderStats").hidden = !journal;
+  $("crumb").hidden = home; $("folderStats").hidden = !(journal || failView);
   $("folderEditBtn").hidden = !folder;
-  $("addRow").hidden = home || journal || statsView || !$("form").hidden || !$("folderForm").hidden;
+  $("addRow").hidden = home || journal || statsView || failView || !$("form").hidden || !$("folderForm").hidden;
   $("addFolderBtn").hidden = !goalsView;
   $("backBtn").textContent = folder ? "‹ My goals" : "‹ Home";
 
   if (home){ renderToday(); $("list").innerHTML = ""; return; }
   if (journal) return renderJournal();
   if (statsView) return renderStats();
+  if (failView) return renderFailures();
 
   if (folder){
     const f = state.folders[route.id], gs = goalsIn(route.id);
@@ -703,6 +718,60 @@ function renderStats(){
   $("list").innerHTML = html + `</div>`;
 }
 
+let editingFail = null, confirmFail = null;
+function renderFailures(){
+  $("folderTitle").textContent = "CV of failures";
+  $("folderStats").textContent = "Things you tried that didn't work out, and what they taught you.";
+  const today = dayKey(Date.now());
+  const ed = editingFail ? state.failures.find(f=>f.id===editingFail) : null;
+  const list = state.failures.slice().sort((a,b)=> b.date.localeCompare(a.date) || b.createdAt-a.createdAt);
+  let html = `<form class="cvform" id="cvForm" autocomplete="off">
+      <label class="field"><span>${ed?"Edit entry":"What didn't work out?"}</span><input id="cvTitle" maxlength="160" placeholder="e.g. Didn't pass the Konzertfach entrance exam" value="${ed?esc(ed.title):""}"></label>
+      <label class="field"><span>What I learned (optional)</span><textarea id="cvLesson" maxlength="600" placeholder="What would you do differently next time?">${ed&&ed.lesson?esc(ed.lesson):""}</textarea></label>
+      <label class="field"><span>When</span><input type="date" id="cvDate" value="${ed?ed.date:today}" max="${today}" style="max-width:180px"></label>
+      <div class="row"><button type="submit" class="primary" style="flex:0;min-width:110px">${ed?"Save":"Add"}</button>${ed?`<button type="button" class="ghost" data-cvcancel="1">Cancel</button>`:""}</div>
+    </form>`;
+  if (!list.length){
+    html += `<div class="empty"><h2>Nothing here yet</h2><p>Every attempt that didn't work out is proof you tried. Add one when it happens.</p></div>`;
+  } else {
+    let year = null, open = false;
+    list.forEach(f=>{
+      const y = f.date.slice(0,4);
+      if (y!==year){ if (open) html += `</ul>`; html += `<div class="cvyear">${y}</div><ul class="cvlist">`; year = y; open = true; }
+      const d = keyDate(f.date).toLocaleDateString(undefined,{day:"numeric",month:"short"});
+      html += `<li><span class="cvdate">${d}</span><span class="cvtitle">${esc(f.title)}</span>
+        ${f.lesson?`<span class="cvlesson">${esc(f.lesson)}</span>`:""}
+        <span class="cvactions"><button type="button" class="linkbtn" data-cvedit="${f.id}">Edit</button>
+        ${confirmFail===f.id?`<button type="button" class="linkbtn" style="color:var(--danger)" data-cvdelyes="${f.id}">Delete for good</button><button type="button" class="linkbtn" style="color:var(--muted)" data-cvno="1">Keep</button>`:`<button type="button" class="linkbtn" style="color:var(--muted)" data-cvdel="${f.id}">Delete…</button>`}</span></li>`;
+    });
+    if (open) html += `</ul>`;
+  }
+  $("list").innerHTML = html;
+}
+$("list").addEventListener("submit", ev=>{
+  if (ev.target.id !== "cvForm") return;
+  ev.preventDefault();
+  const title = $("cvTitle").value.trim(); if (!title) return toast("Write what didn't work out first.");
+  const lesson = $("cvLesson").value.trim(), date = $("cvDate").value || dayKey(Date.now());
+  if (editingFail){
+    const f = state.failures.find(x=>x.id===editingFail);
+    if (f){ f.title = title; f.date = date; if (lesson) f.lesson = lesson; else delete f.lesson; }
+    editingFail = null; toast("Entry updated");
+  } else {
+    const f = {id:newId("x"), title, date, createdAt:Date.now()}; if (lesson) f.lesson = lesson;
+    state.failures.push(f); toast("Added to your CV of failures");
+  }
+  persist(); renderFailures();
+});
+$("list").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-cvedit],[data-cvcancel],[data-cvdel],[data-cvdelyes],[data-cvno]"); if (!b) return;
+  if (b.dataset.cvedit){ editingFail = b.dataset.cvedit; confirmFail = null; renderFailures(); window.scrollTo(0,0); $("cvTitle").focus(); }
+  else if (b.dataset.cvcancel){ editingFail = null; renderFailures(); }
+  else if (b.dataset.cvdel){ confirmFail = b.dataset.cvdel; renderFailures(); }
+  else if (b.dataset.cvno){ confirmFail = null; renderFailures(); }
+  else if (b.dataset.cvdelyes){ state.failures = state.failures.filter(f=>f.id!==b.dataset.cvdelyes); confirmFail = null; persist(); renderFailures(); toast("Entry deleted"); }
+});
+
 function sessHTML(s){
   const label = `${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":""}`;
   if (editingSession !== s.id){
@@ -812,7 +881,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = "● " + r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
   document.title = "● " + t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && route.view!=="failures" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1052,6 +1121,7 @@ $("folderDeleteYes").onclick=()=>{
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
+$("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
 $("runStop").onclick=()=>{
   const id = $("runStop").dataset.id; if (!state.goals[id]) return;
