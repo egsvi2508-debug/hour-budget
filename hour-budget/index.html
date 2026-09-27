@@ -183,6 +183,8 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .cvlesson::before{content:"Learned: ";font-weight:600}
 .cvactions{grid-column:2;display:flex;gap:12px}
 .cvactions button{font-size:13px;min-height:28px;padding:0}
+.rem{gap:16px}
+.remq{margin:0;padding:4px 0 4px 14px;border-left:3px solid var(--accent);font-family:var(--display);font-size:20px;line-height:1.35;text-wrap:pretty}
 .homenote{display:flex;flex-direction:column;gap:8px;padding:2px 4px}
 .rowlink{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:12px 16px;border-radius:14px;background:transparent;border:1px solid var(--line);text-align:left}
 .rowlink svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
@@ -404,6 +406,17 @@ details.sitem summary .sval{white-space:nowrap}
     <label class="field"><span>How did it feel? What could be better? (optional)</span>
       <textarea id="rateNote" maxlength="600" placeholder="Focused after the first 20 min. Phone was a distraction."></textarea></label>
     <button type="button" class="primary" id="rateSave">Save rating</button>
+  </section>
+</div>
+
+<!-- daily reminder: first time the app is opened each day -->
+<div class="scrim" id="remScrim" hidden>
+  <section class="rate rem" role="dialog" aria-modal="true" aria-labelledby="remTitle">
+    <span class="eyebrow" id="remEyebrow">Before you start</span>
+    <h2 id="remTitle">Remind yourself</h2>
+    <blockquote class="remq">You are responsible without limits. You can respond to everything. You have the option to choose.</blockquote>
+    <blockquote class="remq">Stop trying to be better than others, and stop enjoying their misfortunes. Focus on experiencing life.</blockquote>
+    <button type="button" class="primary" id="remOk">I'll remember</button>
   </section>
 </div>
 
@@ -897,7 +910,7 @@ function scheduleMidnight(){
 }
 scheduleMidnight();
 setInterval(checkNewDay, 30000);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden){ state = load(); render(); wake(); nextRating(); } });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden && $("remScrim").hidden){ state = load(); render(); wake(); if (!maybeReminder()) nextRating(); } });
 
 /* ---------- wake lock ---------- */
 let lock = null;
@@ -922,8 +935,22 @@ function stopGoal(id){
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
   return ms >= 60000 ? addSession(g, id, ms, "timer", start) : 0;
 }
+function maybeReminder(){
+  const k = dayKey(Date.now());
+  if (state.settings.remindedOn === k || !$("remScrim").hidden) return false;
+  const h = new Date().getHours();
+  $("remEyebrow").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  $("remScrim").hidden = false; document.body.style.overflow = "hidden";
+  $("remOk").focus();
+  return true;
+}
+$("remOk").onclick = ()=>{
+  state.settings.remindedOn = dayKey(Date.now()); persist();
+  $("remScrim").hidden = true; document.body.style.overflow = "";
+  nextRating();
+};
 function nextRating(){
-  if (!$("rateScrim").hidden) return;
+  if (!$("rateScrim").hidden || !$("remScrim").hidden) return;
   const p = state.sessions.find(s=>s.rating===null);
   if (p) openRating(p.id);
 }
@@ -1144,7 +1171,7 @@ window.addEventListener("appinstalled",()=>{ $("installBar").hidden=true; });
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
 if (route.view==="folder" && !state.folders[route.id]) route = {view:"home"};
-persist(); render(); wake(); nextRating();
+persist(); render(); wake(); if (!maybeReminder()) nextRating();
 })();
 </script>
 </body>
