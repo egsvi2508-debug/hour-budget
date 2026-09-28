@@ -42,9 +42,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font
 header{display:flex;justify-content:space-between;align-items:center;gap:12px}
 h1{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.05;margin:0;letter-spacing:-.01em}
 .hright{display:flex;align-items:center;gap:14px}
-.week{text-align:right}
-.week .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.week .val{font-family:var(--mono);font-size:17px;font-variant-numeric:tabular-nums}
 .iconbtn{min-height:40px;min-width:40px;padding:0;display:grid;place-items:center;font-size:20px;line-height:1}
 .note{font-size:13px;color:var(--muted);margin:0}
 .list{display:flex;flex-direction:column;gap:14px}
@@ -104,7 +101,6 @@ input.num{width:72px;font-family:var(--mono)}
 .folder .ficon svg{width:22px;height:22px;fill:none;stroke:var(--accent);stroke-width:2}
 .folder .fbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .folder .fname{font-family:var(--display);font-weight:500;font-size:18px;overflow-wrap:anywhere}
-.folder .fmeta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .folder .frun{font-family:var(--mono);font-size:13px;color:var(--run);font-variant-numeric:tabular-nums}
 .folder.hasrun{border-color:var(--run);box-shadow:0 0 0 3px var(--run-soft)}
 .folder .chev{color:var(--muted);font-size:22px;flex:none}
@@ -121,15 +117,12 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .daypanel::after{content:"";position:absolute;right:-50px;top:-50px;width:180px;height:180px;border-radius:50%;border:22px solid currentColor;opacity:.08;pointer-events:none}
 .dp-label{font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.75}
 .dp-big{font-family:var(--mono);font-size:48px;font-weight:500;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
-.dp-meta{font-size:14px;opacity:.85;font-variant-numeric:tabular-nums}
 .dp-run{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px 8px 8px 12px;margin-top:6px;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
 .dp-stop{background:var(--run);border-color:var(--run);color:#fff;min-height:36px;padding:6px 14px;font-weight:600}
-.dp-week{font-size:14px;opacity:.85;border-top:1px solid color-mix(in srgb, currentColor 25%, transparent);padding-top:10px;margin-top:6px}
 .bigbtn{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:104px;padding:20px 22px;border-radius:22px;background:var(--surface);border:1.5px solid var(--ink);text-align:left}
 .bigbtn:active{transform:scale(.99)}
 .bb-text{display:flex;flex-direction:column;gap:2px;min-width:0}
 .bb-title{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.1}
-.bb-sub{font-size:14px;color:var(--muted)}
 .hright{display:flex;align-items:center;gap:8px}
 .statbtn{min-height:36px;padding:6px 14px;border-radius:99px;font-size:14px;font-weight:500}
 .statgrid{display:flex;flex-direction:column;gap:14px}
@@ -217,18 +210,10 @@ header{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 12
 .hright{grid-column:2;grid-row:1}
 .hello h1{grid-column:1/-1;grid-row:2;font-size:28px;text-wrap:balance}
 .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
-.navbtn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:6px 12px;color:var(--ink)}
-.navbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
-.today{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
-.today .trow{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
-.today .tbig{font-family:var(--mono);font-size:30px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.today .tmeta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.today .week-line{font-size:14px;border-top:1px dashed var(--line);padding-top:10px}
 .entry{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;border-left:3px solid var(--accent-soft);padding-left:10px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;min-height:96px;resize:vertical}
 textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .linkbtn{border:0;padding:4px 0;min-height:32px;color:var(--accent);font-weight:500;background:none}
-.human{font-size:13px;color:var(--muted);margin-top:-6px}
 .chip{display:inline-block;font-family:var(--mono);font-size:12px;padding:1px 7px;border-radius:99px;border:1px solid var(--muted);color:var(--muted);font-variant-numeric:tabular-nums}
 .chip.hi{border-color:var(--accent);color:var(--accent)}
 .chip.lo{border-color:var(--danger);color:var(--danger)}
@@ -277,7 +262,7 @@ details.sitem summary .sval{white-space:nowrap}
     </div>
     <div class="hright">
       <button type="button" class="statbtn" id="statsBtn">Stats</button>
-      <button type="button" class="iconbtn ghost" id="menuBtn" aria-label="Settings and backup" aria-expanded="false">⋯</button>
+      <button type="button" class="iconbtn ghost" id="menuBtn" aria-label="Settings" aria-expanded="false">⋯</button>
     </div>
   </header>
 
@@ -455,7 +440,7 @@ const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 
 let state = load();
 let route = parseHash();          // {view:"home"|"folder"|"journal", id}
 let msConfirm = null, formMs = [];
-let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
+let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", editingFolder = null;
 let ratingId = null, editingDay = null, editingSession = null, confirmSess = null, confirmDay = null, confirmClear = false;
 const openDays = new Set(), openSess = new Set();
 document.addEventListener("toggle", e=>{
@@ -899,7 +884,7 @@ function cardHTML(g){
     big = hm(done); sub = target ? "of " + g.targetH + " h" : "logged";
     if (target){ pct = Math.min(100,done/target*100); finished = done>=target; }
   }
-  let paceTxt = "", late = false, human = "";
+  let paceTxt = "", late = false;
   if (g.deadline){
     const end = new Date(g.deadline+"T23:59:59").getTime();
     const daysLeft = Math.ceil((end-Date.now())/DAY);
@@ -911,9 +896,6 @@ function cardHTML(g){
       const pd = remH/Math.max(1,daysLeft);
       paceTxt = "≈ " + (pd<10?pd.toFixed(1):Math.round(pd)) + " h/day · " + daysLeft + " days to " + dateLabel(g.deadline);
       late = pd>8;
-      const share = remH / (Math.max(1,daysLeft)*WAKE_H);
-      const every = Math.round(1/share);
-      human = "That's " + (share*100<1 ? "under 1%" : Math.round(share*100) + "%") + " of your waking time until then" + (every>1 && every<200 ? ", about 1 hour in every " + every + "." : ".");
     }
   }
   const rated = state.sessions.filter(s=>s.goalId===g.id && s.ms>0);
@@ -1243,12 +1225,8 @@ $("runStop").onclick=()=>{
   persist(); render(); wake(); nextRating();
 };
 
-/* ---------- backup ---------- */
+/* ---------- settings menu ---------- */
 $("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; };
-
-/* ---------- journal editing helpers ---------- */
-$("list").addEventListener("input", ev=>{
-});
 
 /* ---------- install ---------- */
 let deferred = null;
