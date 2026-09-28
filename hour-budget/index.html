@@ -168,6 +168,26 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .gratadd{display:flex;gap:8px}
 .gratadd input{flex:1;min-width:0}
 .gratadd button{flex:none}
+.ms{list-style:none;margin:0;padding:10px 0 0;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:2px}
+.ms-head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+.ms li{display:flex;align-items:center;gap:12px;min-height:44px}
+.ms .msk{flex:none;width:28px;height:28px;min-height:0;padding:0;border-radius:50%;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:14px;line-height:1;color:transparent;background:transparent}
+.ms li.next .msk{border-color:var(--ink);border-width:2px}
+.ms li.done .msk{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ms .mtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ms .mname{font-size:15px;overflow-wrap:anywhere}
+.ms li.later .mname{color:var(--muted)}
+.ms li.next .mname{font-weight:600}
+.ms .mhrs{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ms .mhrs b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+.ms .mconf{display:flex;gap:6px}
+.ms .mconf button{min-height:32px;padding:4px 10px;font-size:13px}
+.ms-edit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ms-edit:empty{display:none}
+.ms-edit li{display:flex;gap:6px;align-items:center}
+.ms-edit .msn{flex:none;width:22px;text-align:center;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.ms-edit input{flex:1;min-width:0}
+.ms-edit .msb{flex:none;min-width:40px;padding:0;font-size:17px}
 .gj{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .gj li{display:flex;gap:8px;align-items:flex-start}
 .gj li::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:.55em}
@@ -385,6 +405,10 @@ details.sitem summary .sval{white-space:nowrap}
       <label class="field"><span id="hLabel">Hour budget</span><input id="fHours" type="number" min="0" step="0.5" inputmode="decimal" placeholder="100"></label>
       <label class="field"><span>Deadline (optional)</span><input id="fDate" type="date"></label>
     </div>
+    <div class="field"><span>Milestones (optional, in order)</span>
+      <ol class="ms-edit" id="msEdit"></ol>
+      <button type="button" class="ghost" id="msAdd" style="align-self:flex-start">+ Add milestone</button>
+    </div>
     <div class="row">
       <button type="submit" class="primary" id="saveBtn">Save goal</button>
       <button type="button" class="ghost" id="cancelBtn">Cancel</button>
@@ -430,6 +454,7 @@ const $ = id => document.getElementById(id);
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 let state = load();
 let route = parseHash();          // {view:"home"|"folder"|"journal", id}
+let msConfirm = null, formMs = [];
 let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", pendingImport = null, editingFolder = null;
 let ratingId = null, editingDay = null, editingSession = null, confirmSess = null, confirmDay = null, confirmClear = false;
 const openDays = new Set(), openSess = new Set();
@@ -657,6 +682,8 @@ function renderJournal(){
   const byDay = {};
   state.sessions.forEach(s=>{ const k=dayKey(s.at); (byDay[k]=byDay[k]||[]).push(s); });
   Object.keys(state.days).forEach(k=>{ if (dayHasContent(state.days[k])) byDay[k]=byDay[k]||[]; });
+  const msByDay = {};
+  allGoals().forEach(g=>(g.milestones||[]).forEach(m=>{ if (m.doneAt){ const k = dayKey(m.doneAt); (msByDay[k]=msByDay[k]||[]).push({g,m}); byDay[k]=byDay[k]||[]; } }));
   const keys = Object.keys(byDay).sort().reverse();
   $("folderStats").textContent = keys.length ? "Tap a day to open it." : "";
   if (!keys.length){
@@ -679,6 +706,7 @@ function renderJournal(){
       <summary><span class="dname">${label}</span><span class="dsum">${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${t3.length?`<div><div class="eyebrow" style="margin-bottom:6px">3 things</div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></div>`:""}
+        ${msByDay[k]?`<div><div class="eyebrow" style="margin-bottom:6px">Milestones reached</div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${hm(m.doneMs)}</span></li>`).join("")}</ul></div>`:""}
         ${gr.length?`<div><div class="eyebrow" style="margin-bottom:6px">Grateful for</div><ul class="gj">${gr.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></div>`:""}
         ${editing
           ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
@@ -836,6 +864,30 @@ function folderHTML(f){
   </button>`;
 }
 
+function msHTML(g){
+  const ms = g.milestones || []; if (!ms.length) return "";
+  const reached = ms.filter(m=>m.doneAt);
+  const lastAt = reached.reduce((a,m)=>Math.max(a,m.doneMs||0),0);
+  const nextIdx = ms.findIndex(m=>!m.doneAt);
+  let prev = null;
+  const rows = ms.map((m,i)=>{
+    let cls, info = "";
+    if (m.doneAt){
+      cls = "done";
+      const took = prev ? m.doneMs - prev.doneMs : m.doneMs;
+      info = `reached at <b>${hm(m.doneMs)}</b>` + (took>=0 ? ` · took ${hm(took)}` : "") + ` · ${new Date(m.doneAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}`;
+      prev = m;
+    } else if (i===nextIdx){
+      cls = "next";
+      info = `next · <b>${hm(Math.max(0,doneNow(g)-lastAt))}</b> in so far`;
+    } else cls = "later";
+    const conf = msConfirm===m.id
+      ? `<span class="mconf"><button type="button" class="danger" data-msundo="${g.id}|${m.id}">Undo</button><button type="button" class="ghost" data-mskeep="1">Keep</button></span>` : "";
+    return `<li class="${cls}"><button type="button" class="msk" data-ms="${g.id}|${m.id}" aria-label="${m.doneAt?"Reached. Tap to undo":"Mark as reached"}">✓</button><span class="mtext"><span class="mname">${esc(m.name)}</span>${info?`<span class="mhrs">${info}</span>`:""}</span>${conf}</li>`;
+  }).join("");
+  return `<ol class="ms"><li class="ms-head" style="min-height:0">Milestones · ${reached.length}/${ms.length}</li>${rows}</ol>`;
+}
+
 function cardHTML(g){
   const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince;
   let big, sub, pct = null, finished = false;
@@ -872,6 +924,7 @@ function cardHTML(g){
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
     <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
+    ${msHTML(g)}
     <div class="actions">
       ${isRun?`<button type="button" class="primary stop" data-act="stop">Stop · rate session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
@@ -1004,6 +1057,19 @@ $("list").addEventListener("click", ev=>{
     }
     editingSession = null; return render();
   }
+  if ((b = pick("[data-ms]"))){
+    const [gid, mid] = b.dataset.ms.split("|"), g = state.goals[gid], m = g && (g.milestones||[]).find(x=>x.id===mid);
+    if (!m) return;
+    if (m.doneAt){ msConfirm = msConfirm===m.id ? null : m.id; return render(); }
+    m.doneAt = Date.now(); m.doneMs = doneNow(g); msConfirm = null;
+    persist(); render(); toast(m.name + " reached at " + hm(m.doneMs)); return;
+  }
+  if ((b = pick("[data-msundo]"))){
+    const [gid, mid] = b.dataset.msundo.split("|"), g = state.goals[gid], m = g && (g.milestones||[]).find(x=>x.id===mid);
+    if (m){ delete m.doneAt; delete m.doneMs; persist(); toast("Milestone open again"); }
+    msConfirm = null; return render();
+  }
+  if ((b = pick("[data-mskeep]"))){ msConfirm = null; return render(); }
   if ((b = pick("[data-t3j]"))){
     const [k,i] = b.dataset.t3j.split("|"); const it = state.days[k] && state.days[k].top3 && state.days[k].top3[+i];
     if (it){ it.done = !it.done; persist(); }
@@ -1098,9 +1164,22 @@ function openForm(id){
   $("fName").value = g ? g.name : ""; $("fHours").value = g && g.targetH ? g.targetH : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
   fillFolderSelect(g ? g.folderId : (route.view==="folder" ? route.id : null));
   setMode(g ? g.mode : "down");
+  formMs = g && g.milestones ? g.milestones.map(m=>({...m})) : []; drawMsEdit();
   $("form").hidden=false; $("addRow").hidden=true; $("menu").hidden=true;
   $("form").scrollIntoView({behavior:"smooth",block:"start"});
 }
+function drawMsEdit(){
+  $("msEdit").innerHTML = formMs.map((m,i)=>`<li><span class="msn">${m.doneAt?"✓":i+1}</span><input data-msi="${i}" value="${esc(m.name)}" maxlength="80" placeholder="${i===0?"e.g. Chapter 3":"e.g. Chapter "+(i+3)}" autocomplete="off" enterkeyhint="next" aria-label="Milestone ${i+1}"><button type="button" class="ghost msb" data-msup="${i}" aria-label="Move up"${i===0?" disabled":""}>↑</button><button type="button" class="ghost msb" data-msdel="${i}" aria-label="Remove">×</button></li>`).join("");
+}
+function addMsRow(){ formMs.push({id:newId("m"), name:""}); drawMsEdit(); const ins = $("msEdit").querySelectorAll("input"); ins[ins.length-1].focus(); }
+$("msAdd").onclick = addMsRow;
+$("msEdit").addEventListener("input", e=>{ const i = e.target.dataset.msi; if (i!=null) formMs[+i].name = e.target.value; });
+$("msEdit").addEventListener("keydown", e=>{ if (e.key==="Enter" && e.target.dataset.msi!=null){ e.preventDefault(); addMsRow(); } });
+$("msEdit").addEventListener("click", e=>{
+  const u = e.target.closest("[data-msup]"), d = e.target.closest("[data-msdel]");
+  if (u){ const i = +u.dataset.msup; [formMs[i-1], formMs[i]] = [formMs[i], formMs[i-1]]; drawMsEdit(); }
+  else if (d){ formMs.splice(+d.dataset.msdel, 1); drawMsEdit(); }
+});
 function closeForm(){ $("form").hidden=true; editingId=null; if (route.view!=="journal") $("addRow").hidden=false; }
 $("addBtn").onclick=()=>openForm(null); $("cancelBtn").onclick=()=>{ closeForm(); render(); };
 $("form").addEventListener("submit",ev=>{
@@ -1117,7 +1196,8 @@ $("form").addEventListener("submit",ev=>{
   const id = editingId || newId("g");
   const base = state.goals[id] || {doneMs:0,runningSince:null,createdAt:Date.now()};
   const wasEditing = !!editingId, moved = wasEditing && base.folderId !== folderId;
-  state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null};
+  const milestones = formMs.map(m=>({...m, name:(m.name||"").trim()})).filter(m=>m.name);
+  state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null, milestones};
   if (wasEditing) state.sessions.forEach(s=>{ if (s.goalId===id) s.goalName = name; });
   if (persist()){
     toast(wasEditing ? (moved ? "Goal moved" : "Goal updated") : "Goal added");
