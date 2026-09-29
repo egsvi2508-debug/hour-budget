@@ -119,6 +119,10 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .dp-big{font-family:var(--mono);font-size:48px;font-weight:500;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .dp-run{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px 8px 8px 12px;margin-top:6px;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
 .dp-stop{background:var(--run);border-color:var(--run);color:#fff;min-height:36px;padding:6px 14px;font-weight:600}
+.dp-btns{display:flex;gap:6px;flex:none}
+.dp-pause{background:rgba(255,255,255,.16);border-color:transparent;color:inherit;min-height:36px;padding:6px 12px;font-weight:600}
+.goal.paused{border-color:var(--run);border-style:dashed}
+.live.paused{color:var(--muted)}
 .bigbtn{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:104px;padding:20px 22px;border-radius:22px;background:var(--surface);border:1.5px solid var(--ink);text-align:left}
 .bigbtn:active{transform:scale(.99)}
 .bb-text{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -286,7 +290,7 @@ details.sitem summary .sval{white-space:nowrap}
       <div class="dp-big" id="todayTotal">0h 00m</div>
       <div class="dp-run" id="runRow" hidden>
         <span id="runText"></span>
-        <button type="button" class="dp-stop" id="runStop">Stop</button>
+        <span class="dp-btns"><button type="button" class="dp-pause" id="runPause">Pause</button><button type="button" class="dp-stop" id="runStop">Stop</button></span>
       </div>
     </div>
 
@@ -526,12 +530,19 @@ function goalsIn(fid){
     .sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 }
 function folders(){ return Object.entries(state.folders).map(([id,f])=>({id,...f})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); }
-function doneNow(g){ return (g.doneMs||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
-function running(){ return allGoals().find(g=>g.runningSince); }
+/* timer: runningSince = start of the current stretch (null while paused), acc = time from earlier stretches, pausedAt = paused */
+function elapsed(g){ return (g.acc||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
+function doneNow(g){ return (g.doneMs||0) + elapsed(g); }
+function running(){ return allGoals().find(g=>g.runningSince || g.pausedAt); }
+function runLabel(g){ return (g.pausedAt ? "Paused · " : "● ") + clock(elapsed(g)); }
 function sumSince(from, goalIds){
   let t = 0;
   state.sessions.forEach(s=>{ if (s.at>=from && (!goalIds || goalIds.has(s.goalId))) t += s.ms; });
-  const r = running(); if (r && (!goalIds || goalIds.has(r.id))) t += Date.now() - Math.max(from, r.runningSince);
+  const r = running();
+  if (r && (!goalIds || goalIds.has(r.id))){
+    if ((r.sessionStart||r.runningSince||0) >= from) t += r.acc||0;
+    if (r.runningSince) t += Date.now() - Math.max(from, r.runningSince);
+  }
   return Math.max(0,t);
 }
 function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); }
@@ -548,7 +559,7 @@ function render(){
   $("greeting").textContent = name ? hi + ", " + name : hi;
   $("dateLine").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
   const r = running();
-  document.title = r ? "● " + clock(Date.now()-r.runningSince) + " · " + r.name : "Hour Budget";
+  document.title = r ? runLabel(r) + " · " + r.name : "Hour Budget";
 
   const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures";
   $("homeView").hidden = !home; $("homeHeader").hidden = !home;
@@ -652,7 +663,7 @@ function renderToday(){
   $("todayTotal").textContent = hm(total);
   const r = running();
   $("runRow").hidden = !r;
-  if (r){ $("runText").textContent = "● " + r.name + " · " + clock(Date.now()-r.runningSince); $("runStop").dataset.id = r.id; }
+  if (r){ $("runText").textContent = r.name + " · " + runLabel(r); $("runStop").dataset.id = r.id; $("runPause").textContent = r.pausedAt ? "Resume" : "Pause"; }
   $("nameAsk").hidden = !!(state.settings.name||"").trim();
   if ($("entryEdit").hidden){
     const e = state.days[dayKey(Date.now())];
@@ -710,7 +721,7 @@ function renderStats(){
   const r = running();
   const block = (from) => {
     const ss = work.filter(s=>s.at>=from);
-    return {ms: sumSince(from), n: ss.length + (r && r.runningSince>=from ? 1 : 0), avg: weightedAvg(ss)};
+    return {ms: sumSince(from), n: ss.length + (r && (r.sessionStart||r.runningSince||0)>=from ? 1 : 0), avg: weightedAvg(ss)};
   };
   const today = block(t0), w7 = block(now-7*DAY), w30 = block(now-30*DAY), all = block(0);
   const dayset = new Set(work.map(s=>dayKey(s.at)));
@@ -838,12 +849,12 @@ function removeSessions(list){
 function folderHTML(f){
   const gs = goalsIn(f.id);
   const total = gs.reduce((s,g)=>s+doneNow(g),0);
-  const run = gs.find(g=>g.runningSince);
+  const run = gs.find(g=>g.runningSince || g.pausedAt);
   return `<button type="button" class="folder${run?" hasrun":""}" data-folder="${f.id}">
     <span class="ficon">${FOLDER_SVG}</span>
     <span class="fbody">
       <span class="fname">${esc(f.name)}</span>
-      ${run?`<span class="frun" data-frun="${f.id}">● ${esc(run.name)} · ${clock(Date.now()-run.runningSince)}</span>`:""}
+      ${run?`<span class="frun" data-frun="${f.id}">${esc(run.name)} · ${runLabel(run)}</span>`:""}
     </span>
     <span class="chev" aria-hidden="true">›</span>
   </button>`;
@@ -874,7 +885,7 @@ function msHTML(g){
 }
 
 function cardHTML(g){
-  const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince;
+  const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince, isPaused = !!g.pausedAt;
   let big, sub, pct = null, finished = false;
   if (down){
     const rem = Math.ceil(Math.max(0,target-done)/60000)*60000; finished = rem===0;
@@ -901,14 +912,14 @@ function cardHTML(g){
   const rated = state.sessions.filter(s=>s.goalId===g.id && s.ms>0);
   const avg = weightedAvg(rated);
   const open = openPanel===g.id, recent = state.sessions.filter(s=>s.goalId===g.id).slice(-5).reverse();
-  return `<article class="goal${isRun?" running":""}${finished?" done-goal":""}" data-id="${g.id}">
+  return `<article class="goal${isRun?" running":""}${isPaused?" paused":""}${finished?" done-goal":""}" data-id="${g.id}">
     <div class="top"><h3 class="name">${esc(g.name)}</h3><span class="mode">${down?"Countdown":"Tally"}</span></div>
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
-    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun?`<span class="live" data-live="${g.id}">● ${clock(Date.now()-g.runningSince)}</span>`:""}</div>
+    <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun||isPaused?`<span class="live${isPaused?" paused":""}" data-live="${g.id}">${runLabel(g)}</span>`:""}</div>
     ${msHTML(g)}
     <div class="actions">
-      ${isRun?`<button type="button" class="primary stop" data-act="stop">Stop · rate session</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
+      ${isRun||isPaused?`<button type="button" class="primary stop" data-act="stop" style="min-width:0">Stop</button><button type="button" data-act="${isPaused?"resume":"pause"}">${isPaused?"Resume":"Pause"}</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
     </div>
     ${open?`<div class="panel">
@@ -925,11 +936,11 @@ function cardHTML(g){
 
 setInterval(()=>{
   const r = running(); if (!r) return;
-  const t = clock(Date.now()-r.runningSince);
-  const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = "● " + t;
-  if (!$("runRow").hidden) $("runText").textContent = "● " + r.name + " · " + t;
-  if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = "● " + r.name + " · " + t; }
-  document.title = "● " + t + " · " + r.name;
+  const t = runLabel(r);
+  const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = t;
+  if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
+  if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
+  document.title = t + " · " + r.name;
   if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && route.view!=="failures" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
@@ -951,7 +962,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rat
 /* ---------- wake lock ---------- */
 let lock = null;
 async function wake(){
-  const on = !!running();
+  const r = running(), on = !!(r && r.runningSince);
   try{
     if (on && !lock && "wakeLock" in navigator){ lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release",()=>lock=null); }
     else if (!on && lock){ await lock.release(); lock = null; }
@@ -966,9 +977,10 @@ function addSession(g, gid, ms, src, at){
   return s;
 }
 function stopGoal(id){
-  const g = state.goals[id]; if (!g || !g.runningSince) return null;
-  const start = g.runningSince, ms = Date.now()-start;
+  const g = state.goals[id]; if (!g || !(g.runningSince || g.pausedAt)) return null;
+  const ms = elapsed(g), start = g.sessionStart || g.runningSince || (Date.now()-ms);
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
+  delete g.acc; delete g.pausedAt; delete g.sessionStart;
   return ms >= 60000 ? addSession(g, id, ms, "timer", start) : 0;
 }
 function maybeReminder(){
@@ -1070,7 +1082,11 @@ $("list").addEventListener("click", ev=>{
   if (act==="edit") return openForm(id);
   if (act==="start"){
     Object.keys(state.goals).forEach(k=>{ if(k!==id) stopGoal(k); });
-    g.runningSince = Date.now();
+    g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt;
+  } else if (act==="pause"){
+    pauseGoal(g);
+  } else if (act==="resume"){
+    resumeGoal(g);
   } else if (act==="stop"){
     const s = stopGoal(id);
     if (!s) toast("Under a minute, not logged");
@@ -1219,6 +1235,13 @@ $("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
+function pauseGoal(g){ if (!g.runningSince) return; g.acc = elapsed(g); g.runningSince = null; g.pausedAt = Date.now(); }
+function resumeGoal(g){ if (!g.pausedAt) return; g.runningSince = Date.now(); delete g.pausedAt; }
+$("runPause").onclick=()=>{
+  const g = state.goals[$("runStop").dataset.id]; if (!g) return;
+  if (g.pausedAt) resumeGoal(g); else pauseGoal(g);
+  persist(); render(); wake();
+};
 $("runStop").onclick=()=>{
   const id = $("runStop").dataset.id; if (!state.goals[id]) return;
   const s = stopGoal(id); if (!s) toast("Under a minute, not logged");
