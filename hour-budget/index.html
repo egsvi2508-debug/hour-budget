@@ -177,13 +177,20 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .ms li.next .mname{font-weight:600}
 .ms .mhrs{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .ms .mhrs b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+.ms .mhrs .late{color:var(--danger);font-weight:600}
+.ms .mhrs .early{color:var(--accent);font-weight:600}
+.ms li.overdue .msk{border-color:var(--danger)}
 .ms .mconf{display:flex;gap:6px}
 .ms .mconf button{min-height:32px;padding:4px 10px;font-size:13px}
 .ms-edit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .ms-edit:empty{display:none}
-.ms-edit li{display:flex;gap:6px;align-items:center}
-.ms-edit .msn{flex:none;width:22px;text-align:center;font-family:var(--mono);font-size:13px;color:var(--muted)}
-.ms-edit input{flex:1;min-width:0}
+.ms-edit li{display:flex;gap:6px;align-items:flex-start}
+.ms-edit .msf{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.ms-edit .msdue{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.ms-edit .msdue input{flex:1}
+.ms-edit .msdue.missing input{border-color:var(--danger)}
+.ms-edit .msn{flex:none;width:22px;text-align:center;line-height:42px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.ms-edit input{width:100%;min-width:0}
 .ms-edit .msb{flex:none;min-width:40px;padding:0;font-size:17px}
 .gj{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .gj li{display:flex;gap:8px;align-items:flex-start}
@@ -443,7 +450,7 @@ const $ = id => document.getElementById(id);
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 let state = load();
 let route = parseHash();          // {view:"home"|"folder"|"journal", id}
-let msConfirm = null, formMs = [];
+let msConfirm = null, formMs = [], msShowMissing = false;
 let openPanel = null, confirmDelete = null, editingId = null, formMode = "down", editingFolder = null;
 let ratingId = null, editingDay = null, editingSession = null, confirmSess = null, confirmDay = null, confirmClear = false;
 const openDays = new Set(), openSess = new Set();
@@ -860,6 +867,7 @@ function folderHTML(f){
   </button>`;
 }
 
+function days(n){ return n + (n===1 ? " day" : " days"); }
 function msHTML(g){
   const ms = g.milestones || []; if (!ms.length) return "";
   const reached = ms.filter(m=>m.doneAt);
@@ -871,12 +879,23 @@ function msHTML(g){
     if (m.doneAt){
       cls = "done";
       const took = prev ? m.doneMs - prev.doneMs : m.doneMs;
-      info = `reached at <b>${hm(m.doneMs)}</b>` + (took>=0 ? ` · took ${hm(took)}` : "") + ` · ${new Date(m.doneAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}`;
+      let vs = "";
+      if (m.due){ const d = Math.round((keyDate(m.due) - keyDate(dayKey(m.doneAt)))/DAY); vs = d>0 ? ` · <span class="early">${days(d)} early</span>` : d<0 ? ` · <span class="late">${days(-d)} late</span>` : " · on time"; }
+      info = `reached at <b>${hm(m.doneMs)}</b>` + (took>=0 ? ` · took ${hm(took)}` : "") + ` · ${new Date(m.doneAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}` + vs;
       prev = m;
     } else if (i===nextIdx){
       cls = "next";
-      info = `next · <b>${hm(Math.max(0,doneNow(g)-lastAt))}</b> in so far`;
-    } else cls = "later";
+      let due = `<span class="late">no deadline, edit to add one</span>`;
+      if (m.due){
+        const d = Math.round((keyDate(m.due) - startOfToday())/DAY);
+        if (d<0) cls += " overdue";
+        due = d<0 ? `<span class="late">overdue by ${days(-d)}</span>` : d===0 ? `<span class="late">due today</span>` : d===1 ? "due tomorrow" : `due ${dateLabel(m.due)} · ${days(d)} left`;
+      }
+      info = `${due} · <b>${hm(Math.max(0,doneNow(g)-lastAt))}</b> in so far`;
+    } else {
+      cls = "later";
+      info = m.due ? "due " + dateLabel(m.due) : "";
+    }
     const conf = msConfirm===m.id
       ? `<span class="mconf"><button type="button" class="danger" data-msundo="${g.id}|${m.id}">Undo</button><button type="button" class="ghost" data-mskeep="1">Keep</button></span>` : "";
     return `<li class="${cls}"><button type="button" class="msk" data-ms="${g.id}|${m.id}" aria-label="${m.doneAt?"Reached. Tap to undo":"Mark as reached"}">✓</button><span class="mtext"><span class="mname">${esc(m.name)}</span>${info?`<span class="mhrs">${info}</span>`:""}</span>${conf}</li>`;
@@ -1162,16 +1181,21 @@ function openForm(id){
   $("fName").value = g ? g.name : ""; $("fHours").value = g && g.targetH ? g.targetH : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
   fillFolderSelect(g ? g.folderId : (route.view==="folder" ? route.id : null));
   setMode(g ? g.mode : "down");
-  formMs = g && g.milestones ? g.milestones.map(m=>({...m})) : []; drawMsEdit();
+  formMs = g && g.milestones ? g.milestones.map(m=>({...m})) : []; msShowMissing = false; drawMsEdit();
   $("form").hidden=false; $("addRow").hidden=true; $("menu").hidden=true;
   $("form").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function drawMsEdit(){
-  $("msEdit").innerHTML = formMs.map((m,i)=>`<li><span class="msn">${m.doneAt?"✓":i+1}</span><input data-msi="${i}" value="${esc(m.name)}" maxlength="80" placeholder="${i===0?"e.g. Chapter 3":"e.g. Chapter "+(i+3)}" autocomplete="off" enterkeyhint="next" aria-label="Milestone ${i+1}"><button type="button" class="ghost msb" data-msup="${i}" aria-label="Move up"${i===0?" disabled":""}>↑</button><button type="button" class="ghost msb" data-msdel="${i}" aria-label="Remove">×</button></li>`).join("");
+  $("msEdit").innerHTML = formMs.map((m,i)=>`<li><span class="msn">${m.doneAt?"✓":i+1}</span><div class="msf"><input data-msi="${i}" value="${esc(m.name)}" maxlength="80" placeholder="${i===0?"e.g. Chapter 3":"e.g. Chapter "+(i+3)}" autocomplete="off" enterkeyhint="next" aria-label="Milestone ${i+1}"><label class="msdue${m.name&&!m.due&&msShowMissing?" missing":""}"><span>Deadline</span><input type="date" data-msd="${i}" value="${m.due||""}" aria-label="Deadline for milestone ${i+1}"></label></div><button type="button" class="ghost msb" data-msup="${i}" aria-label="Move up"${i===0?" disabled":""}>↑</button><button type="button" class="ghost msb" data-msdel="${i}" aria-label="Remove">×</button></li>`).join("");
 }
-function addMsRow(){ formMs.push({id:newId("m"), name:""}); drawMsEdit(); const ins = $("msEdit").querySelectorAll("input"); ins[ins.length-1].focus(); }
+function addMsRow(){ formMs.push({id:newId("m"), name:""}); drawMsEdit(); const ins = $("msEdit").querySelectorAll("[data-msi]"); ins[ins.length-1].focus(); }
 $("msAdd").onclick = addMsRow;
-$("msEdit").addEventListener("input", e=>{ const i = e.target.dataset.msi; if (i!=null) formMs[+i].name = e.target.value; });
+$("msEdit").addEventListener("input", e=>{
+  const i = e.target.dataset.msi, d = e.target.dataset.msd;
+  if (i!=null) formMs[+i].name = e.target.value;
+  if (d!=null){ formMs[+d].due = e.target.value; e.target.closest(".msdue").classList.toggle("missing", !e.target.value && msShowMissing); }
+});
+$("msEdit").addEventListener("change", e=>{ const d = e.target.dataset.msd; if (d!=null) formMs[+d].due = e.target.value; });
 $("msEdit").addEventListener("keydown", e=>{ if (e.key==="Enter" && e.target.dataset.msi!=null){ e.preventDefault(); addMsRow(); } });
 $("msEdit").addEventListener("click", e=>{
   const u = e.target.closest("[data-msup]"), d = e.target.closest("[data-msdel]");
@@ -1185,6 +1209,17 @@ $("form").addEventListener("submit",ev=>{
   const name = $("fName").value.trim(), hrs = parseFloat($("fHours").value);
   if (!name) return toast("Give the goal a name.");
   if (formMode==="down" && !(hrs>0)) return toast("A countdown needs an hour budget.");
+  const named = formMs.filter(m=>(m.name||"").trim());
+  const noDue = named.find(m=>!m.due);
+  if (noDue){
+    msShowMissing = true; drawMsEdit();
+    const el = $("msEdit").querySelector(`[data-msd="${formMs.indexOf(noDue)}"]`); if (el) el.focus();
+    return toast(`Set a deadline for “${noDue.name.trim()}”.`);
+  }
+  for (let i=1;i<named.length;i++) if (named[i].due < named[i-1].due)
+    return toast(`“${named[i].name.trim()}” is due before “${named[i-1].name.trim()}”. Fix the order or the dates.`);
+  const goalDue = $("fDate").value, tooLate = goalDue && named.find(m=>m.due > goalDue);
+  if (tooLate) return toast(`“${tooLate.name.trim()}” is due after the goal's deadline.`);
   let folderId = $("fFolder").value || null;
   if (folderId==="__new"){
     const fname = $("fNewFolder").value.trim();
@@ -1193,7 +1228,7 @@ $("form").addEventListener("submit",ev=>{
   }
   const id = editingId || newId("g");
   const base = state.goals[id] || {doneMs:0,runningSince:null,createdAt:Date.now()};
-  const wasEditing = !!editingId, moved = wasEditing && base.folderId !== folderId;
+  const wasEditing = !!editingId, moved = wasEditing && (base.folderId||null) !== folderId;
   const milestones = formMs.map(m=>({...m, name:(m.name||"").trim()})).filter(m=>m.name);
   state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null, milestones};
   if (wasEditing) state.sessions.forEach(s=>{ if (s.goalId===id) s.goalName = name; });
