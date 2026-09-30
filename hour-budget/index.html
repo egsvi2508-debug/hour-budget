@@ -387,10 +387,18 @@ details.sitem summary .sval{white-space:nowrap}
       <button type="button" data-t="Exam prep|down|100">Exam prep · 100 h</button>
       <button type="button" data-t="New piece|down|30">New piece · 30 h</button>
       <button type="button" data-t="Reading|up|">Reading · tally</button>
+      <button type="button" data-t="Meditation|down|100|sessions|11">Meditation · 100 × 11 min</button>
     </div>
     <label class="field"><span>Name</span><input id="fName" maxlength="80" placeholder="Analysis 1" autocomplete="off"></label>
     <label class="field"><span>Folder</span><select id="fFolder"></select></label>
     <label class="field" id="fNewFolderWrap" hidden><span>New folder name</span><input id="fNewFolder" maxlength="60" placeholder="Maths" autocomplete="off"></label>
+    <div class="field"><span>Count</span>
+      <div class="seg" role="group" aria-label="What to count">
+        <button type="button" id="uHours" aria-pressed="true">Hours</button>
+        <button type="button" id="uSess" aria-pressed="false">Sessions</button>
+      </div>
+    </div>
+    <label class="field" id="fLenWrap" hidden><span>Length of one session (minutes)</span><input id="fLen" type="number" min="1" step="1" inputmode="numeric" placeholder="11"></label>
     <div class="field"><span>Direction</span>
       <div class="seg" role="group" aria-label="Direction">
         <button type="button" id="mDown" aria-pressed="true">Count down</button>
@@ -541,7 +549,34 @@ function folders(){ return Object.entries(state.folders).map(([id,f])=>({id,...f
 function elapsed(g){ return (g.acc||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
 function doneNow(g){ return (g.doneMs||0) + elapsed(g); }
 function running(){ return allGoals().find(g=>g.runningSince || g.pausedAt); }
-function runLabel(g){ return (g.pausedAt ? "Paused · " : "● ") + clock(elapsed(g)); }
+function isSess(g){ return !!g && g.unit==="sessions"; }
+function sessLen(g){ return Math.max(1, g.sessMin||1) * 60000; }
+function nTxt(n){ return n + (n===1 ? " session" : " sessions"); }
+function runLabel(g){
+  const t = isSess(g) ? clock(Math.max(0, sessLen(g)-elapsed(g))).replace(/^0:/, "") + " left" : clock(elapsed(g));
+  return (g.pausedAt ? "Paused · " : "● ") + t;
+}
+/* end-of-session bell (needs the app open; unlocked by the tap on Start) */
+let actx = null;
+function audioUnlock(){ try{ actx = actx || new (window.AudioContext||window.webkitAudioContext)(); if (actx.state==="suspended") actx.resume(); }catch(e){} }
+function chime(){
+  try{ if (navigator.vibrate) navigator.vibrate([500,200,500]); }catch(e){}
+  if (!actx) return;
+  try{
+    if (actx.state==="suspended") actx.resume();
+    const t0 = actx.currentTime + 0.05;
+    [0, 2.4, 4.8].forEach(off=>{
+      [[528,1],[1056,.35],[1587,.15]].forEach(([f,a])=>{
+        const o = actx.createOscillator(), gn = actx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        gn.gain.setValueAtTime(0.0001, t0+off);
+        gn.gain.exponentialRampToValueAtTime(0.35*a, t0+off+0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, t0+off+2.3);
+        o.connect(gn).connect(actx.destination); o.start(t0+off); o.stop(t0+off+2.4);
+      });
+    });
+  }catch(e){}
+}
 function sumSince(from, goalIds){
   let t = 0;
   state.sessions.forEach(s=>{ if (s.at>=from && (!goalIds || goalIds.has(s.goalId))) t += s.ms; });
@@ -709,7 +744,7 @@ function renderJournal(){
       <summary><span class="dname">${label}</span><span class="dsum">${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${t3.length?`<div><div class="eyebrow" style="margin-bottom:6px">3 things</div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></div>`:""}
-        ${msByDay[k]?`<div><div class="eyebrow" style="margin-bottom:6px">Milestones reached</div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${hm(m.doneMs)}</span></li>`).join("")}</ul></div>`:""}
+        ${msByDay[k]?`<div><div class="eyebrow" style="margin-bottom:6px">Milestones reached</div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${isSess(g) ? "session " + (m.doneN||0) : hm(m.doneMs)}</span></li>`).join("")}</ul></div>`:""}
         ${gr.length?`<div><div class="eyebrow" style="margin-bottom:6px">Grateful for</div><ul class="gj">${gr.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></div>`:""}
         ${editing
           ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
@@ -818,7 +853,7 @@ $("list").addEventListener("click", ev=>{
 });
 
 function sessHTML(s){
-  const label = `${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":""}`;
+  const label = `${esc(s.goalName||"Goal")}${s.src==="correction"?" · correction":""}${s.n===1?" · session ✓":s.n===0?" · stopped early":""}`;
   if (editingSession !== s.id){
     return `<li><details class="sitem" data-sess="${s.id}"${openSess.has(s.id)?" open":""}>
       <summary><span class="sname">${label}</span><span class="sval">${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></summary>
@@ -871,17 +906,18 @@ function days(n){ return n + (n===1 ? " day" : " days"); }
 function msHTML(g){
   const ms = g.milestones || []; if (!ms.length) return "";
   const reached = ms.filter(m=>m.doneAt);
-  const lastAt = reached.reduce((a,m)=>Math.max(a,m.doneMs||0),0);
+  const sess = isSess(g), val = m => sess ? (m.doneN||0) : (m.doneMs||0), fmt = sess ? nTxt : hm;
+  const lastAt = reached.reduce((a,m)=>Math.max(a,val(m)),0);
   const nextIdx = ms.findIndex(m=>!m.doneAt);
   let prev = null;
   const rows = ms.map((m,i)=>{
     let cls, info = "";
     if (m.doneAt){
       cls = "done";
-      const took = prev ? m.doneMs - prev.doneMs : m.doneMs;
+      const took = prev ? val(m) - val(prev) : val(m);
       let vs = "";
       if (m.due){ const d = Math.round((keyDate(m.due) - keyDate(dayKey(m.doneAt)))/DAY); vs = d>0 ? ` · <span class="early">${days(d)} early</span>` : d<0 ? ` · <span class="late">${days(-d)} late</span>` : " · on time"; }
-      info = `reached at <b>${hm(m.doneMs)}</b>` + (took>=0 ? ` · took ${hm(took)}` : "") + ` · ${new Date(m.doneAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}` + vs;
+      info = (sess ? `reached at <b>session ${val(m)}</b>` : `reached at <b>${hm(m.doneMs)}</b>`) + (took>=0 ? ` · took ${fmt(took)}` : "") + ` · ${new Date(m.doneAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})}` + vs;
       prev = m;
     } else if (i===nextIdx){
       cls = "next";
@@ -891,7 +927,7 @@ function msHTML(g){
         if (d<0) cls += " overdue";
         due = d<0 ? `<span class="late">overdue by ${days(-d)}</span>` : d===0 ? `<span class="late">due today</span>` : d===1 ? "due tomorrow" : `due ${dateLabel(m.due)} · ${days(d)} left`;
       }
-      info = `${due} · <b>${hm(Math.max(0,doneNow(g)-lastAt))}</b> in so far`;
+      info = `${due} · <b>${fmt(Math.max(0,(sess ? g.doneN||0 : doneNow(g))-lastAt))}</b> ${sess?"so far":"in so far"}`;
     } else {
       cls = "later";
       info = m.due ? "due " + dateLabel(m.due) : "";
@@ -906,7 +942,11 @@ function msHTML(g){
 function cardHTML(g){
   const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince, isPaused = !!g.pausedAt;
   let big, sub, pct = null, finished = false;
-  if (down){
+  const sess = isSess(g), N = g.doneN||0, T = g.targetN||0;
+  if (sess){
+    if (down){ const left = Math.max(0,T-N); finished = left===0; big = String(left); sub = finished ? "all sessions done" : (left===1?"session":"sessions") + " left of " + T; pct = T ? Math.min(100,N/T*100) : 0; }
+    else { big = String(N); sub = (N===1?"session":"sessions") + (T ? " of " + T : " done"); if (T){ pct = Math.min(100,N/T*100); finished = N>=T; } }
+  } else if (down){
     const rem = Math.ceil(Math.max(0,target-done)/60000)*60000; finished = rem===0;
     big = hm(rem); sub = finished ? "budget reached" : "left of " + g.targetH + " h";
     pct = target ? Math.min(100,done/target*100) : 0;
@@ -918,35 +958,36 @@ function cardHTML(g){
   if (g.deadline){
     const end = new Date(g.deadline+"T23:59:59").getTime();
     const daysLeft = Math.ceil((end-Date.now())/DAY);
-    const remH = target ? Math.max(0,target-done)/H : null;
+    const remH = sess ? (T ? Math.max(0,T-N) : null) : (target ? Math.max(0,target-done)/H : null);
     if (daysLeft < 0){ paceTxt = "Deadline passed (" + dateLabel(g.deadline) + ")"; late = remH!==0; }
     else if (remH===null) paceTxt = daysLeft + " days left · until " + dateLabel(g.deadline);
     else if (remH===0) paceTxt = "Reached before " + dateLabel(g.deadline);
     else {
       const pd = remH/Math.max(1,daysLeft);
-      paceTxt = "≈ " + (pd<10?pd.toFixed(1):Math.round(pd)) + " h/day · " + daysLeft + " days to " + dateLabel(g.deadline);
-      late = pd>8;
+      paceTxt = "≈ " + (pd<10?pd.toFixed(1):Math.round(pd)) + (sess ? " sessions/day · " : " h/day · ") + daysLeft + " days to " + dateLabel(g.deadline);
+      late = sess ? pd*sessLen(g)/H > 8 : pd>8;
     }
   }
   const rated = state.sessions.filter(s=>s.goalId===g.id && s.ms>0);
   const avg = weightedAvg(rated);
   const open = openPanel===g.id, recent = state.sessions.filter(s=>s.goalId===g.id).slice(-5).reverse();
   return `<article class="goal${isRun?" running":""}${isPaused?" paused":""}${finished?" done-goal":""}" data-id="${g.id}">
-    <div class="top"><h3 class="name">${esc(g.name)}</h3><span class="mode">${down?"Countdown":"Tally"}</span></div>
+    <div class="top"><h3 class="name">${esc(g.name)}</h3><span class="mode">${sess ? g.sessMin + "-min sessions" : down?"Countdown":"Tally"}</span></div>
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
     <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun||isPaused?`<span class="live${isPaused?" paused":""}" data-live="${g.id}">${runLabel(g)}</span>`:""}</div>
     ${msHTML(g)}
     <div class="actions">
-      ${isRun||isPaused?`<button type="button" class="primary stop" data-act="stop" style="min-width:0">Stop</button><button type="button" data-act="${isPaused?"resume":"pause"}">${isPaused?"Resume":"Pause"}</button>`:`<button type="button" class="primary" data-act="start">Start timer</button>`}
+      ${isRun||isPaused?`<button type="button" class="primary stop" data-act="stop" style="min-width:0">Stop</button><button type="button" data-act="${isPaused?"resume":"pause"}">${isPaused?"Resume":"Pause"}</button>`:`<button type="button" class="primary" data-act="start">${sess ? "Start session · " + g.sessMin + " min" : "Start timer"}</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
     </div>
     ${open?`<div class="panel">
-      <div class="row"><label for="h-${g.id}">Worked without the timer:</label>
+      ${sess ? `<div class="row"><span class="note">Did one without the timer?</span></div>
+      <div class="row"><button type="button" data-act="addn">+ Add a session</button><button type="button" class="ghost" data-act="subn">− Remove one</button></div>` : `<div class="row"><label for="h-${g.id}">Worked without the timer:</label>
         <input class="num" id="h-${g.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0" aria-label="hours"><span class="note">h</span>
         <input class="num" id="m-${g.id}" type="number" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="minutes"><span class="note">min</span></div>
-      <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Correct (remove)</button></div>
-      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}${e.when?" · "+whenLabel(e.when):""}${e.src==="correction"?" · correction":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
+      <div class="row"><button type="button" data-act="add">+ Add time</button><button type="button" class="ghost" data-act="sub">− Correct (remove)</button></div>`}
+      ${recent.length?`<div><p class="note" style="margin-bottom:6px">Recent sessions</p><ul class="log">${recent.map(e=>`<li><span>${new Date(e.at).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}${e.when?" · "+whenLabel(e.when):""}${e.src==="correction"?" · correction":""}${e.n===1?" · session ✓":e.n===0?" · stopped early":""}</span><b class="${e.ms<0?"neg":""}">${e.ms<0?"":"+"}${hm(e.ms)} ${chip(e.rating)}</b></li>`).join("")}</ul></div>`:""}
       <div class="row"><button type="button" class="ghost" data-act="edit">Edit / move</button>
         ${confirmDelete===g.id?`<button type="button" class="danger" data-act="delete-yes">Delete for good</button><button type="button" class="ghost" data-act="delete-no">Keep</button>`:`<button type="button" class="ghost" data-act="delete">Delete…</button>`}</div>
     </div>`:""}
@@ -955,6 +996,7 @@ function cardHTML(g){
 
 setInterval(()=>{
   const r = running(); if (!r) return;
+  if (isSess(r) && r.runningSince && elapsed(r) >= sessLen(r)) return finishSession(r.id);
   const t = runLabel(r);
   const el = document.querySelector(`[data-live="${r.id}"]`); if (el) el.textContent = t;
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
@@ -976,7 +1018,7 @@ function scheduleMidnight(){
 }
 scheduleMidnight();
 setInterval(checkNewDay, 30000);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden && $("remScrim").hidden){ state = load(); render(); wake(); if (!maybeReminder()) nextRating(); } });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && $("rateScrim").hidden && $("remScrim").hidden){ state = load(); render(); wake(); checkSessionEnd(); if (!maybeReminder()) nextRating(); } });
 
 /* ---------- wake lock ---------- */
 let lock = null;
@@ -997,10 +1039,33 @@ function addSession(g, gid, ms, src, at){
 }
 function stopGoal(id){
   const g = state.goals[id]; if (!g || !(g.runningSince || g.pausedAt)) return null;
-  const ms = elapsed(g), start = g.sessionStart || g.runningSince || (Date.now()-ms);
+  let ms = elapsed(g); const start = g.sessionStart || g.runningSince || (Date.now()-ms);
+  const full = isSess(g) && ms >= sessLen(g) - 1000;
+  if (isSess(g)) ms = Math.min(ms, sessLen(g));
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
   delete g.acc; delete g.pausedAt; delete g.sessionStart;
-  return ms >= 60000 ? addSession(g, id, ms, "timer", start) : 0;
+  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; return s; }
+  if (ms < 60000) return 0;
+  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0;
+  return s;
+}
+function stopFeedback(g, s){
+  if (isSess(g)){
+    if (s && s.n) sessionDone(g);
+    else toast(s ? "Stopped early: " + hm(s.ms) + " logged, not counted as a session" : "Stopped early, not counted");
+  } else if (!s) toast("Under a minute, not logged");
+}
+function sessionDone(g){
+  chime();
+  toast("Session done · " + (g.doneN||0) + (g.targetN ? " of " + g.targetN : ""));
+}
+function finishSession(id){
+  const g = state.goals[id]; const s = stopGoal(id);
+  persist(); render(); wake(); stopFeedback(g, s); nextRating();
+}
+function checkSessionEnd(){
+  const r = running();
+  if (r && isSess(r) && r.runningSince && elapsed(r) >= sessLen(r)) finishSession(r.id);
 }
 function maybeReminder(){
   const k = dayKey(Date.now());
@@ -1074,12 +1139,12 @@ $("list").addEventListener("click", ev=>{
     const [gid, mid] = b.dataset.ms.split("|"), g = state.goals[gid], m = g && (g.milestones||[]).find(x=>x.id===mid);
     if (!m) return;
     if (m.doneAt){ msConfirm = msConfirm===m.id ? null : m.id; return render(); }
-    m.doneAt = Date.now(); m.doneMs = doneNow(g); msConfirm = null;
-    persist(); render(); toast(m.name + " reached at " + hm(m.doneMs)); return;
+    m.doneAt = Date.now(); m.doneMs = doneNow(g); if (isSess(g)) m.doneN = g.doneN||0; msConfirm = null;
+    persist(); render(); toast(m.name + " reached at " + (isSess(g) ? "session " + m.doneN : hm(m.doneMs))); return;
   }
   if ((b = pick("[data-msundo]"))){
     const [gid, mid] = b.dataset.msundo.split("|"), g = state.goals[gid], m = g && (g.milestones||[]).find(x=>x.id===mid);
-    if (m){ delete m.doneAt; delete m.doneMs; persist(); toast("Milestone open again"); }
+    if (m){ delete m.doneAt; delete m.doneMs; delete m.doneN; persist(); toast("Milestone open again"); }
     msConfirm = null; return render();
   }
   if ((b = pick("[data-mskeep]"))){ msConfirm = null; return render(); }
@@ -1102,13 +1167,22 @@ $("list").addEventListener("click", ev=>{
   if (act==="start"){
     Object.keys(state.goals).forEach(k=>{ if(k!==id) stopGoal(k); });
     g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt;
+    if (isSess(g)) audioUnlock();
   } else if (act==="pause"){
     pauseGoal(g);
   } else if (act==="resume"){
-    resumeGoal(g);
+    resumeGoal(g); if (isSess(g)) audioUnlock();
   } else if (act==="stop"){
-    const s = stopGoal(id);
-    if (!s) toast("Under a minute, not logged");
+    stopFeedback(g, stopGoal(id));
+  } else if (act==="addn"){
+    const len = sessLen(g); g.doneN = (g.doneN||0) + 1; g.doneMs = (g.doneMs||0) + len;
+    addSession(g, id, len, "manual").n = 1;
+    toast("Session added · " + g.doneN + (g.targetN ? " of " + g.targetN : ""));
+  } else if (act==="subn"){
+    if (!(g.doneN>0)) return toast("No sessions to remove yet.");
+    const len = sessLen(g); g.doneN -= 1; g.doneMs = Math.max(0, (g.doneMs||0) - len);
+    addSession(g, id, -len, "correction").n = -1;
+    toast("Removed one session");
   } else if (act==="add"||act==="sub"){
     const h = parseFloat($("h-"+id).value)||0, m = parseFloat($("m-"+id).value)||0;
     let ms = Math.round((h*60+m)*60000);
@@ -1154,15 +1228,26 @@ $("nameFirst").addEventListener("keydown",e=>{ if(e.key==="Enter") $("nameFirstS
 $("nameSave").onclick = ()=>{ setName($("nameInput").value); toast("Name saved"); };
 
 /* ---------- goal form ---------- */
+let formUnit = "hours";
 function setMode(m){
   formMode = m;
   $("mDown").setAttribute("aria-pressed", m==="down"); $("mUp").setAttribute("aria-pressed", m==="up");
-  $("hLabel").textContent = m==="down" ? "Hour budget" : "Target hours (optional)";
+  $("hLabel").textContent = formUnit==="sessions"
+    ? (m==="down" ? "Number of sessions" : "Target sessions (optional)")
+    : (m==="down" ? "Hour budget" : "Target hours (optional)");
+}
+function setUnit(u){
+  formUnit = u;
+  $("uHours").setAttribute("aria-pressed", u==="hours"); $("uSess").setAttribute("aria-pressed", u==="sessions");
+  $("fLenWrap").hidden = u!=="sessions";
+  $("fHours").step = u==="sessions" ? "1" : "0.5";
+  setMode(formMode);
 }
 $("mDown").onclick=()=>setMode("down"); $("mUp").onclick=()=>setMode("up");
+$("uHours").onclick=()=>setUnit("hours"); $("uSess").onclick=()=>{ setUnit("sessions"); if (!$("fLen").value) $("fLen").focus(); };
 $("chips").addEventListener("click",ev=>{
   const b = ev.target.closest("button[data-t]"); if(!b) return;
-  const [n,m,h] = b.dataset.t.split("|"); $("fName").value=n; setMode(m); $("fHours").value=h; $("fName").select();
+  const [n,m,h,u,len] = b.dataset.t.split("|"); $("fName").value=n; setUnit(u||"hours"); setMode(m); $("fHours").value=h; $("fLen").value=len||""; $("fName").select();
 });
 function fillFolderSelect(selected){
   $("fFolder").innerHTML = [`<option value="">No folder</option>`]
@@ -1178,9 +1263,10 @@ function openForm(id){
   $("formTitle").textContent = g ? "Edit goal" : "New goal";
   $("saveBtn").textContent = g ? "Save changes" : "Save goal";
   $("chips").hidden = !!g;
-  $("fName").value = g ? g.name : ""; $("fHours").value = g && g.targetH ? g.targetH : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
+  $("fName").value = g ? g.name : ""; $("fHours").value = g ? (isSess(g) ? g.targetN||"" : g.targetH||"") : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
+  $("fLen").value = g && g.sessMin ? g.sessMin : ""; formUnit = isSess(g) ? "sessions" : "hours";
   fillFolderSelect(g ? g.folderId : (route.view==="folder" ? route.id : null));
-  setMode(g ? g.mode : "down");
+  formMode = g ? g.mode : "down"; setUnit(formUnit);
   formMs = g && g.milestones ? g.milestones.map(m=>({...m})) : []; msShowMissing = false; drawMsEdit();
   $("form").hidden=false; $("addRow").hidden=true; $("menu").hidden=true;
   $("form").scrollIntoView({behavior:"smooth",block:"start"});
@@ -1208,7 +1294,9 @@ $("form").addEventListener("submit",ev=>{
   ev.preventDefault();
   const name = $("fName").value.trim(), hrs = parseFloat($("fHours").value);
   if (!name) return toast("Give the goal a name.");
-  if (formMode==="down" && !(hrs>0)) return toast("A countdown needs an hour budget.");
+  const sessU = formUnit==="sessions", len = parseFloat($("fLen").value);
+  if (formMode==="down" && !(hrs>0)) return toast(sessU ? "A countdown needs a number of sessions." : "A countdown needs an hour budget.");
+  if (sessU && !(len>0)) return toast("Set how many minutes one session lasts.");
   const named = formMs.filter(m=>(m.name||"").trim());
   const noDue = named.find(m=>!m.due);
   if (noDue){
@@ -1230,7 +1318,9 @@ $("form").addEventListener("submit",ev=>{
   const base = state.goals[id] || {doneMs:0,runningSince:null,createdAt:Date.now()};
   const wasEditing = !!editingId, moved = wasEditing && (base.folderId||null) !== folderId;
   const milestones = formMs.map(m=>({...m, name:(m.name||"").trim()})).filter(m=>m.name);
-  state.goals[id] = {...base, name, folderId, mode:formMode, targetH: hrs>0?hrs:null, deadline:$("fDate").value||null, milestones};
+  state.goals[id] = {...base, name, folderId, mode:formMode, unit: sessU ? "sessions" : "hours",
+    targetH: !sessU && hrs>0 ? hrs : null, targetN: sessU && hrs>0 ? Math.round(hrs) : null, sessMin: sessU ? Math.round(len) : null,
+    deadline:$("fDate").value||null, milestones};
   if (wasEditing) state.sessions.forEach(s=>{ if (s.goalId===id) s.goalName = name; });
   if (persist()){
     toast(wasEditing ? (moved ? "Goal moved" : "Goal updated") : "Goal added");
@@ -1274,12 +1364,12 @@ function pauseGoal(g){ if (!g.runningSince) return; g.acc = elapsed(g); g.runnin
 function resumeGoal(g){ if (!g.pausedAt) return; g.runningSince = Date.now(); delete g.pausedAt; }
 $("runPause").onclick=()=>{
   const g = state.goals[$("runStop").dataset.id]; if (!g) return;
-  if (g.pausedAt) resumeGoal(g); else pauseGoal(g);
+  if (g.pausedAt){ resumeGoal(g); if (isSess(g)) audioUnlock(); } else pauseGoal(g);
   persist(); render(); wake();
 };
 $("runStop").onclick=()=>{
   const id = $("runStop").dataset.id; if (!state.goals[id]) return;
-  const s = stopGoal(id); if (!s) toast("Under a minute, not logged");
+  const g = state.goals[id]; stopFeedback(g, stopGoal(id));
   persist(); render(); wake(); nextRating();
 };
 
@@ -1294,7 +1384,7 @@ window.addEventListener("appinstalled",()=>{ $("installBar").hidden=true; });
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
 if (route.view==="folder" && !state.folders[route.id]) route = {view:"home"};
-persist(); render(); wake(); if (!maybeReminder()) nextRating();
+persist(); render(); wake(); checkSessionEnd(); if (!maybeReminder()) nextRating();
 })();
 </script>
 </body>
