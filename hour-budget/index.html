@@ -250,7 +250,8 @@ details.day > summary::-webkit-details-marker{display:none}
 details.day > summary .dname{font-weight:600}
 details.day > summary .dsum{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center}
 details.day[open] > summary{border-bottom:1px dashed var(--line)}
-.dbody{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.dbody{padding:14px 16px;display:flex;flex-direction:column;gap:0}
+.dbody .jsec + .jsec{margin-top:12px}
 .sess{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .sess li{display:flex;flex-direction:column;gap:2px}
 .sess .sl{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}
@@ -266,6 +267,32 @@ details.sitem summary .sval{white-space:nowrap}
 .sbody{display:flex;flex-direction:column;gap:4px;padding:2px 0 8px 14px}
 .swhen{font-size:13px;color:var(--muted)}
 .dentry{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+/* cards on home share one frame */
+.card{border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:24px}
+.card-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.card-more{align-self:flex-start;font-size:13px;min-height:28px;padding:0}
+.notes .entry{margin:0}
+/* hour by hour */
+.hlist{display:flex;flex-direction:column}
+.hrow{display:flex;align-items:center;gap:12px;min-height:40px;border-bottom:1px solid var(--line)}
+.hrow:last-child{border-bottom:0}
+.hrow .ht{flex:none;width:46px;font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:5px}
+.hrow.missing .ht::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--run);flex:none}
+.hrow.now .ht{color:var(--accent);font-weight:600}
+.hrow input{flex:1;min-width:0;border:0;background:transparent;padding:8px 0;min-height:38px;border-radius:0;font-size:15px}
+.hrow input:focus-visible{outline:0;box-shadow:inset 0 -2px 0 var(--accent)}
+.hrow input::placeholder{color:var(--muted);opacity:.55}
+.hread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.hread li{display:flex;gap:12px}
+.hread .ht{flex:none;width:46px;font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:1px}
+.hread .hx{overflow-wrap:anywhere}
+/* journal: one fixed order of sections per day */
+.jsec{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.jsec:first-child{padding-top:0;border-top:0}
+.jhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.jhead .jmeta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:6px;align-items:center}
+.jlink{align-self:flex-start;font-size:13px;min-height:28px;padding:0}
 </style>
 </head>
 <body>
@@ -296,6 +323,11 @@ details.sitem summary .sval{white-space:nowrap}
 
   <!-- opening page -->
   <section class="home" id="homeView">
+    <div id="nameAsk" class="row" hidden>
+      <label for="nameFirst" class="note">What should I call you?</label>
+      <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
+      <button type="button" id="nameFirstSave">Save</button>
+    </div>
     <div class="daypanel" id="todayCard">
       <div class="dp-label">Today</div>
       <div class="dp-big" id="todayTotal">0h 00m</div>
@@ -305,8 +337,8 @@ details.sitem summary .sval{white-space:nowrap}
       </div>
     </div>
 
-    <section class="top3" id="top3" aria-label="Three most important things today">
-      <div class="t3-head"><span class="eyebrow">3 things today</span><button type="button" class="linkbtn t3-edit" id="t3EditBtn" hidden>Edit</button></div>
+    <section class="card top3" id="top3" aria-label="Three most important things today">
+      <div class="card-head t3-head"><span class="eyebrow">3 things today</span><button type="button" class="linkbtn t3-edit" id="t3EditBtn" hidden>Edit</button></div>
       <div id="t3View"></div>
       <div id="t3Edit" hidden>
         <p class="note" style="margin:0 0 8px">What are the 3 most important things to do today?</p>
@@ -327,12 +359,23 @@ details.sitem summary .sval{white-space:nowrap}
       <span class="bb-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
     </button>
 
-    <div class="homenote">
-      <div id="nameAsk" class="row" hidden>
-        <label for="nameFirst" class="note">What should I call you?</label>
-        <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
-        <button type="button" id="nameFirstSave">Save</button>
-      </div>
+    <section class="card hours" id="hoursCard" aria-label="Hour by hour" hidden>
+      <div class="card-head"><span class="eyebrow">Hour by hour</span><span class="card-meta" id="hoursMeta"></span></div>
+      <div class="hlist" id="hoursList"></div>
+      <button type="button" class="linkbtn card-more" id="hoursAll"></button>
+    </section>
+
+    <section class="card grat" id="grat" aria-label="Gratitude">
+      <div class="card-head"><span class="eyebrow">Grateful for</span></div>
+      <ul class="gratlist" id="gratList"></ul>
+      <form class="gratadd" id="gratForm" autocomplete="off">
+        <input id="gratInput" maxlength="160" placeholder="I'm grateful for…" aria-label="Something you're grateful for">
+        <button type="submit" class="ghost" id="gratAddBtn">Add</button>
+      </form>
+    </section>
+
+    <section class="card notes" id="notesCard" aria-label="Notes">
+      <div class="card-head"><span class="eyebrow">Notes</span></div>
       <div id="entryView"></div>
       <div id="entryEdit" hidden>
         <textarea id="entryText" maxlength="4000" placeholder="What did you do today? How did it go?"></textarea>
@@ -341,15 +384,6 @@ details.sitem summary .sval{white-space:nowrap}
           <button type="button" class="ghost" id="entryCancel">Cancel</button>
         </div>
       </div>
-    </div>
-
-    <section class="grat" id="grat" aria-label="Gratitude">
-      <div class="eyebrow">Grateful for</div>
-      <ul class="gratlist" id="gratList"></ul>
-      <form class="gratadd" id="gratForm" autocomplete="off">
-        <input id="gratInput" maxlength="160" placeholder="I'm grateful for…" aria-label="Something you're grateful for">
-        <button type="submit" class="ghost" id="gratAddBtn">Add</button>
-      </form>
     </section>
 
     <button type="button" class="rowlink" id="journalBtn">
@@ -680,6 +714,62 @@ $("t3Save").onclick = ()=>{
 };
 ["t3a","t3b","t3c"].forEach((id,i,arr)=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(i<2) $(arr[i+1]).focus(); else $("t3Save").click(); } }));
 
+/* ---------- hour by hour ---------- */
+const H_FIRST = 6, H_LAST = 23;
+let hoursShowAll = false, editingHours = null;
+function hLabel(h){ return pad(h) + ":00"; }
+function hoursOf(k){ return (state.days[k] && state.days[k].hours) || {}; }
+function setHour(k, h, val){
+  const d = state.days[k] || {};
+  d.hours = d.hours || {};
+  if (val.trim()) d.hours[h] = val; else delete d.hours[h];
+  if (!Object.keys(d.hours).length) delete d.hours;
+  d.updatedAt = Date.now();
+  if (dayHasContent(d)) state.days[k] = d; else delete state.days[k];
+  persist();
+}
+function hourRow(k, h, cls){
+  const v = hoursOf(k)[h] || "";
+  return `<label class="hrow ${cls}"><span class="ht">${hLabel(h)}</span><input data-hk="${k}|${h}" value="${esc(v)}" maxlength="200" placeholder="What did you do?" autocomplete="off" enterkeyhint="next" aria-label="What you did at ${hLabel(h)}"></label>`;
+}
+function hoursTyping(){ const a = document.activeElement; return !!(a && a.dataset && a.dataset.hk); }
+function renderHours(force){
+  const card = $("hoursCard"), cur = new Date().getHours(), k = dayKey(Date.now());
+  if (cur < H_FIRST){ card.hidden = true; return; }
+  card.hidden = false;
+  if (hoursTyping() && !force) return;
+  const last = Math.min(cur, H_LAST), hrs = [], filled = hoursOf(k);
+  for (let h=H_FIRST; h<=last; h++) hrs.push(h);
+  const nFilled = hrs.filter(h=>(filled[h]||"").trim()).length;
+  $("hoursMeta").textContent = nFilled + " of " + hrs.length + " filled";
+  const shown = hoursShowAll ? hrs : hrs.filter(h => h===cur || !(filled[h]||"").trim());
+  $("hoursList").innerHTML = shown.map(h => hourRow(k, h, (h===cur ? "now" : "") + (h<cur && !(filled[h]||"").trim() ? " missing" : ""))).join("")
+    || `<p class="note" style="padding:6px 0">All hours so far are filled.</p>`;
+  const hidden = hrs.length - shown.length;
+  $("hoursAll").hidden = !hoursShowAll && !hidden;
+  $("hoursAll").textContent = hoursShowAll ? "Show only what's left" : "See all hours (" + hidden + " filled)";
+}
+$("hoursAll").onclick = ()=>{ hoursShowAll = !hoursShowAll; renderHours(true); };
+document.addEventListener("input", e=>{
+  const hk = e.target.dataset && e.target.dataset.hk; if (!hk) return;
+  const [k, h] = hk.split("|"); setHour(k, +h, e.target.value);
+  if (!$("hoursCard").hidden && k===dayKey(Date.now())){
+    const cur = new Date().getHours(), f = hoursOf(k); let n = 0, t = 0;
+    for (let x=H_FIRST; x<=Math.min(cur,H_LAST); x++){ t++; if ((f[x]||"").trim()) n++; }
+    $("hoursMeta").textContent = n + " of " + t + " filled";
+  }
+});
+document.addEventListener("keydown", e=>{
+  if (e.key!=="Enter" || !(e.target.dataset && e.target.dataset.hk)) return;
+  e.preventDefault();
+  const all = [...(e.target.closest(".hlist")||document).querySelectorAll("[data-hk]")], i = all.indexOf(e.target);
+  if (all[i+1]) all[i+1].focus(); else e.target.blur();
+});
+document.addEventListener("focusout", e=>{
+  if (!(e.target.dataset && e.target.dataset.hk)) return;
+  setTimeout(()=>{ if (!hoursTyping() && route.view==="home") renderHours(true); }, 150);
+});
+
 function renderGrat(){
   const k = dayKey(Date.now()), list = (state.days[k] && state.days[k].grateful) || [];
   $("gratList").innerHTML = list.map((t,i)=>`<li><span class="gtext">${esc(t)}</span><button type="button" class="gdel" data-gdel="${i}" aria-label="Remove">×</button></li>`).join("");
@@ -704,7 +794,7 @@ $("gratList").addEventListener("click", ev=>{
 
 function renderToday(){
   renderTop3();
-  renderGrat();
+  renderGrat(); renderHours();
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
   const total = sumSince(t0);
@@ -721,11 +811,25 @@ function renderToday(){
   }
 }
 
+function jHours(k){
+  const f = hoursOf(k), todayK = dayKey(Date.now());
+  const last = k===todayK ? Math.min(new Date().getHours(), H_LAST) : H_LAST;
+  const hrs = []; for (let h=H_FIRST; h<=last; h++) hrs.push(h);
+  const done = hrs.filter(h=>(f[h]||"").trim());
+  const head = `<div class="jhead"><span class="eyebrow">Hour by hour</span><span class="jmeta">${hrs.length ? done.length + " of " + hrs.length : ""}</span></div>`;
+  if (editingHours===k){
+    return `<section class="jsec">${head}<div class="hlist">${hrs.map(h=>hourRow(k, h, (f[h]||"").trim() ? "" : "missing")).join("")}</div>
+      <button type="button" class="linkbtn jlink" data-hdone="1">Done</button></section>`;
+  }
+  return `<section class="jsec">${head}${done.length ? `<ul class="hread">${done.map(h=>`<li><span class="ht">${hLabel(h)}</span><span class="hx">${esc(f[h].trim())}</span></li>`).join("")}</ul>` : ""}
+    <button type="button" class="linkbtn jlink" data-hedit="${k}">${done.length < hrs.length ? (done.length ? "Fill in the rest" : "+ Fill in the day") : "Edit hours"}</button></section>`;
+}
 function renderJournal(){
   $("folderTitle").textContent = "Journal";
   const byDay = {};
   state.sessions.forEach(s=>{ const k=dayKey(s.at); (byDay[k]=byDay[k]||[]).push(s); });
   Object.keys(state.days).forEach(k=>{ if (dayHasContent(state.days[k])) byDay[k]=byDay[k]||[]; });
+  [0,1].forEach(n=>{ const k = dayKey(Date.now() - n*DAY); byDay[k] = byDay[k] || []; });
   const msByDay = {};
   allGoals().forEach(g=>(g.milestones||[]).forEach(m=>{ if (m.doneAt){ const k = dayKey(m.doneAt); (msByDay[k]=msByDay[k]||[]).push({g,m}); byDay[k]=byDay[k]||[]; } }));
   const keys = Object.keys(byDay).sort().reverse();
@@ -745,18 +849,22 @@ function renderJournal(){
     const t3done = t3.filter(x=>x.done).length;
     const gr = (state.days[k] && state.days[k].grateful) || [];
     const editing = editingDay===k;
-    const isOpen = editing || openDays.has(k) || ss.some(s=>s.id===editingSession);
+    const isOpen = editing || editingHours===k || openDays.has(k) || ss.some(s=>s.id===editingSession);
+    const hf = Object.values(hoursOf(k)).filter(v=>(v||"").trim()).length;
     return `<details class="day" data-day="${k}"${isOpen?" open":""}>
-      <summary><span class="dname">${label}</span><span class="dsum">${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
+      <summary><span class="dname">${label}</span><span class="dsum">${hf?`<span title="Hours logged in the day log">${hf} h noted</span>`:""}${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
-        ${t3.length?`<div><div class="eyebrow" style="margin-bottom:6px">3 things</div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></div>`:""}
-        ${msByDay[k]?`<div><div class="eyebrow" style="margin-bottom:6px">Milestones reached</div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${isSess(g) ? "session " + (m.doneN||0) : hm(m.doneMs)}</span></li>`).join("")}</ul></div>`:""}
-        ${gr.length?`<div><div class="eyebrow" style="margin-bottom:6px">Grateful for</div><ul class="gj">${gr.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></div>`:""}
+        ${jHours(k)}
+        ${t3.length?`<section class="jsec"><div class="jhead"><span class="eyebrow">3 things</span><span class="jmeta">${t3done} of ${t3.length} done</span></div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></section>`:""}
+        ${ss.length ? `<section class="jsec"><div class="jhead"><span class="eyebrow">Sessions</span><span class="jmeta">${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></div><ul class="sess">${ss.map(sessHTML).join("")}</ul></section>` : ""}
+        ${msByDay[k]?`<section class="jsec"><div class="jhead"><span class="eyebrow">Milestones reached</span></div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${isSess(g) ? "session " + (m.doneN||0) : hm(m.doneMs)}</span></li>`).join("")}</ul></section>`:""}
+        ${gr.length?`<section class="jsec"><div class="jhead"><span class="eyebrow">Grateful for</span></div><ul class="gj">${gr.map(t=>`<li><span>${esc(t)}</span></li>`).join("")}</ul></section>`:""}
+        <section class="jsec"><div class="jhead"><span class="eyebrow">Notes</span></div>
         ${editing
           ? `<textarea id="jText" maxlength="4000" placeholder="What did you do this day?">${esc(note||"")}</textarea>
              <div class="row"><button type="button" class="primary" data-jsave="${k}" style="flex:0;min-width:120px">Save</button><button type="button" class="ghost" data-jcancel="1">Cancel</button>${note?`<button type="button" class="ghost" data-jdelentry="${k}">Delete entry</button>`:""}</div>`
-          : (note ? `<p class="dentry">${esc(note)}</p>` : "") + `<button type="button" class="linkbtn" data-jedit="${k}" style="align-self:flex-start">${note?"Edit entry":"+ Add an entry"}</button>`}
-        ${ss.length ? `<ul class="sess">${ss.map(sessHTML).join("")}</ul>` : ""}
+          : (note ? `<p class="dentry">${esc(note)}</p>` : "") + `<button type="button" class="linkbtn jlink" data-jedit="${k}">${note?"Edit notes":"+ Add notes"}</button>`}
+        </section>
       </div>
     </details>`;
   }).join("") + `</div>`;
@@ -1008,7 +1116,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && route.view!=="failures" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !hoursTyping() && !editingHours && route.view!=="failures" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1154,6 +1262,8 @@ $("list").addEventListener("click", ev=>{
     msConfirm = null; return render();
   }
   if ((b = pick("[data-mskeep]"))){ msConfirm = null; return render(); }
+  if ((b = pick("[data-hedit]"))){ editingHours = b.dataset.hedit; render(); const first = $("list").querySelector(`.hrow.missing [data-hk]`) || $("list").querySelector("[data-hk]"); if (first) first.focus(); return; }
+  if ((b = pick("[data-hdone]"))){ editingHours = null; toast("Hours saved"); return render(); }
   if ((b = pick("[data-t3j]"))){
     const [k,i] = b.dataset.t3j.split("|"); const it = state.days[k] && state.days[k].top3 && state.days[k].top3[+i];
     if (it){ it.done = !it.done; persist(); }
@@ -1207,7 +1317,7 @@ $("list").addEventListener("click", ev=>{
 });
 
 /* ---------- daily entry ---------- */
-function dayHasContent(d){ return !!(d && (d.note || (d.top3 && d.top3.length) || (d.grateful && d.grateful.length))); }
+function dayHasContent(d){ return !!(d && (d.note || (d.top3 && d.top3.length) || (d.grateful && d.grateful.length) || (d.hours && Object.keys(d.hours).length))); }
 function saveDay(k, text){
   const t = (text||"").trim();
   const d = state.days[k] || {};
@@ -1365,7 +1475,7 @@ $("folderDeleteYes").onclick=()=>{
   delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go("goals");
 };
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
-$("journalBtn").onclick=()=>{ editingDay = null; go("journal"); };
+$("journalBtn").onclick=()=>{ editingDay = null; editingHours = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
