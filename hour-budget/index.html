@@ -87,6 +87,10 @@ input.num{width:72px;font-family:var(--mono)}
 .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chips button{font-size:13px;min-height:34px;padding:5px 12px;border-radius:99px;color:var(--muted)}
+.field>label{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.datewrap{display:flex;gap:6px;align-items:center}
+.datewrap input{flex:1;min-width:0;width:auto}
+.datewrap button{flex:none;min-height:42px;padding:6px 12px;font-size:14px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:420px){.two{grid-template-columns:1fr}.big{font-size:30px}}
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center}
@@ -407,7 +411,9 @@ details.sitem summary .sval{white-space:nowrap}
     </div>
     <div class="two">
       <label class="field"><span id="hLabel">Hour budget</span><input id="fHours" type="number" min="0" step="0.5" inputmode="decimal" placeholder="100"></label>
-      <label class="field"><span>Deadline (optional)</span><input id="fDate" type="date"></label>
+      <div class="field"><label for="fDate">Deadline (optional)</label>
+        <div class="datewrap"><input id="fDate" type="date"><button type="button" class="ghost" id="fDateClear" hidden aria-label="Remove deadline">Remove</button></div>
+      </div>
     </div>
     <div class="field"><span>Milestones (in order, each with a deadline)</span>
       <ol class="ms-edit" id="msEdit"></ol>
@@ -1229,6 +1235,9 @@ $("nameSave").onclick = ()=>{ setName($("nameInput").value); toast("Name saved")
 
 /* ---------- goal form ---------- */
 let formUnit = "hours";
+function syncDateClear(){ $("fDateClear").hidden = !$("fDate").value; }
+$("fDate").addEventListener("input", syncDateClear); $("fDate").addEventListener("change", syncDateClear);
+$("fDateClear").onclick = ()=>{ $("fDate").value = ""; syncDateClear(); toast("Deadline removed. Save to keep it that way."); };
 function setMode(m){
   formMode = m;
   $("mDown").setAttribute("aria-pressed", m==="down"); $("mUp").setAttribute("aria-pressed", m==="up");
@@ -1263,7 +1272,7 @@ function openForm(id){
   $("formTitle").textContent = g ? "Edit goal" : "New goal";
   $("saveBtn").textContent = g ? "Save changes" : "Save goal";
   $("chips").hidden = !!g;
-  $("fName").value = g ? g.name : ""; $("fHours").value = g ? (isSess(g) ? g.targetN||"" : g.targetH||"") : ""; $("fDate").value = g && g.deadline ? g.deadline : "";
+  $("fName").value = g ? g.name : ""; $("fHours").value = g ? (isSess(g) ? g.targetN||"" : g.targetH||"") : ""; $("fDate").value = g && g.deadline ? g.deadline : ""; syncDateClear();
   $("fLen").value = g && g.sessMin ? g.sessMin : ""; formUnit = isSess(g) ? "sessions" : "hours";
   fillFolderSelect(g ? g.folderId : (route.view==="folder" ? route.id : null));
   formMode = g ? g.mode : "down"; setUnit(formUnit);
