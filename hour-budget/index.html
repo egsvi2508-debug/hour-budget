@@ -273,20 +273,20 @@ details.sitem summary .sval{white-space:nowrap}
 .card-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .card-more{align-self:flex-start;font-size:13px;min-height:28px;padding:0}
 .notes .entry{margin:0}
-/* hour by hour */
-.hlist{display:flex;flex-direction:column}
-.hrow{display:flex;align-items:center;gap:12px;min-height:40px;border-bottom:1px solid var(--line)}
-.hrow:last-child{border-bottom:0}
-.hrow .ht{flex:none;width:46px;font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:5px}
-.hrow.missing .ht::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--run);flex:none}
-.hrow.now .ht{color:var(--accent);font-weight:600}
-.hrow input{flex:1;min-width:0;border:0;background:transparent;padding:8px 0;min-height:38px;border-radius:0;font-size:15px}
-.hrow input:focus-visible{outline:0;box-shadow:inset 0 -2px 0 var(--accent)}
-.hrow input::placeholder{color:var(--muted);opacity:.55}
-.hread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
-.hread li{display:flex;gap:12px}
-.hread .ht{flex:none;width:46px;font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:1px}
-.hread .hx{overflow-wrap:anywhere}
+/* day log: time blocks */
+.blist{display:flex;flex-direction:column}
+.brow{display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:9px 0;min-height:40px;font-size:15px;color:var(--ink)}
+.blist > .brow:last-child{border-bottom:0}
+.brow .bt{flex:none;width:92px;font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.brow .bx{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.35}
+.brow.gap .bx{color:var(--muted);opacity:.7}
+.brow.gap .bx::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--run);margin-right:7px;vertical-align:middle;opacity:1}
+.brow .bt{white-space:nowrap}
+.brow:active{background:var(--accent-soft)}
+.bform{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.btimes{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.btimes input{flex:1;min-width:0;font-family:var(--mono)}
+.bform #bText{width:100%}
 /* journal: one fixed order of sections per day */
 .jsec{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
 .jsec:first-child{padding-top:0;border-top:0}
@@ -359,11 +359,7 @@ details.sitem summary .sval{white-space:nowrap}
       <span class="bb-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
     </button>
 
-    <section class="card hours" id="hoursCard" aria-label="Hour by hour" hidden>
-      <div class="card-head"><span class="eyebrow">Hour by hour</span><span class="card-meta" id="hoursMeta"></span></div>
-      <div class="hlist" id="hoursList"></div>
-      <button type="button" class="linkbtn card-more" id="hoursAll"></button>
-    </section>
+    <section class="card hours" id="hoursCard" aria-label="Your day"></section>
 
     <section class="card grat" id="grat" aria-label="Gratitude">
       <div class="card-head"><span class="eyebrow">Grateful for</span></div>
@@ -516,6 +512,13 @@ function load(){
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || !s.goals) return blank();
   s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || [];
+  // hour-by-hour entries become time blocks
+  Object.values(s.days).forEach(d=>{
+    if (!d.hours) return;
+    d.blocks = d.blocks || [];
+    Object.entries(d.hours).forEach(([h,t])=>{ if ((t||"").trim()) d.blocks.push({id:"b"+h+Math.random().toString(36).slice(2,6), from:String(h).padStart(2,"0")+":00", to:String(+h+1).padStart(2,"0")+":00", text:t.trim()}); });
+    delete d.hours;
+  });
   // migrate per-goal logs into the shared session list
   Object.entries(s.goals).forEach(([gid,g])=>{
     if (Array.isArray(g.log)){
@@ -714,61 +717,95 @@ $("t3Save").onclick = ()=>{
 };
 ["t3a","t3b","t3c"].forEach((id,i,arr)=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(i<2) $(arr[i+1]).focus(); else $("t3Save").click(); } }));
 
-/* ---------- hour by hour ---------- */
-const H_FIRST = 6, H_LAST = 23;
-let hoursShowAll = false, editingHours = null;
-function hLabel(h){ return pad(h) + ":00"; }
-function hoursOf(k){ return (state.days[k] && state.days[k].hours) || {}; }
-function setHour(k, h, val){
+/* ---------- day log: free time blocks ---------- */
+const DAY_START = 6*60, DAY_END = 24*60;
+let blkEdit = null; // {k, where, id|null, from, to, text}
+const tmin = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
+const tfmt = m => pad(Math.floor(m/60)) + ":" + pad(m%60);
+function blocksOf(k){ return ((state.days[k] && state.days[k].blocks) || []).slice().sort((a,b)=>tmin(a.from)-tmin(b.from) || tmin(a.to)-tmin(b.to)); }
+function nowMin(){ const d = new Date(); return d.getHours()*60 + d.getMinutes(); }
+function dayWindow(k){
+  const today = k===dayKey(Date.now());
+  const bl = blocksOf(k), first = bl.length ? Math.min(DAY_START, tmin(bl[0].from)) : DAY_START;
+  return {from:first, to: today ? nowMin() : DAY_END, today};
+}
+function gapsOf(k){
+  const w = dayWindow(k), out = []; let cur = w.from;
+  blocksOf(k).forEach(b=>{ const f = tmin(b.from), t = tmin(b.to); if (f - cur >= 15 && f <= w.to) out.push([cur, Math.min(f, w.to)]); cur = Math.max(cur, t); });
+  if (w.to - cur >= 15) out.push([cur, w.to]);
+  return out;
+}
+function notedMin(k){ return blocksOf(k).reduce((a,b)=>a + Math.max(0, tmin(b.to)-tmin(b.from)), 0); }
+function saveBlocks(k, list){
   const d = state.days[k] || {};
-  d.hours = d.hours || {};
-  if (val.trim()) d.hours[h] = val; else delete d.hours[h];
-  if (!Object.keys(d.hours).length) delete d.hours;
+  if (list.length) d.blocks = list; else delete d.blocks;
   d.updatedAt = Date.now();
   if (dayHasContent(d)) state.days[k] = d; else delete state.days[k];
   persist();
 }
-function hourRow(k, h, cls){
-  const v = hoursOf(k)[h] || "";
-  return `<label class="hrow ${cls}"><span class="ht">${hLabel(h)}</span><input data-hk="${k}|${h}" value="${esc(v)}" maxlength="200" placeholder="What did you do?" autocomplete="off" enterkeyhint="next" aria-label="What you did at ${hLabel(h)}"></label>`;
+function blockFormHTML(){
+  const e = blkEdit;
+  return `<div class="bform">
+    <div class="btimes"><input type="time" id="bFrom" value="${e.from}" aria-label="From"><span>to</span><input type="time" id="bTo" value="${e.to}" aria-label="To"></div>
+    <input id="bText" value="${esc(e.text||"")}" maxlength="200" placeholder="What did you do?" autocomplete="off" enterkeyhint="done">
+    <div class="row"><button type="button" class="primary" data-bsave="1" style="flex:0;min-width:100px">Save</button><button type="button" class="ghost" data-bcancel="1">Cancel</button>${e.id?`<button type="button" class="ghost" data-bdel="1" style="margin-left:auto">Delete</button>`:""}</div>
+  </div>`;
 }
-function hoursTyping(){ const a = document.activeElement; return !!(a && a.dataset && a.dataset.hk); }
+function dayLogHTML(k, where){
+  const bl = blocksOf(k), gaps = gapsOf(k), editingHere = blkEdit && blkEdit.k===k && blkEdit.where===where;
+  const rows = [];
+  bl.forEach(b=>rows.push({at:tmin(b.from), html: editingHere && blkEdit.id===b.id ? blockFormHTML()
+    : `<button type="button" class="brow" data-bedit="${k}|${b.id}|${where}"><span class="bt">${b.from}–${b.to}</span><span class="bx">${esc(b.text)}</span></button>`}));
+  gaps.forEach(([f,t])=>rows.push({at:f, html:`<button type="button" class="brow gap" data-bgap="${k}|${tfmt(f)}|${tfmt(t)}|${where}"><span class="bt">${tfmt(f)}–${tfmt(t)}</span><span class="bx">+ what did you do?</span></button>`}));
+  rows.sort((a,b)=>a.at-b.at);
+  const adding = editingHere && !blkEdit.id;
+  return `<div class="blist">${rows.map(r=>r.html).join("") || `<p class="note" style="padding:4px 0">Nothing noted yet.</p>`}</div>
+    ${adding ? blockFormHTML() : `<button type="button" class="linkbtn card-more" data-badd="${k}|${where}">+ Add a block</button>`}`;
+}
+function dayLogMeta(k){
+  const n = notedMin(k), g = gapsOf(k).length;
+  return (n ? hm(n*60000) + " noted" : "nothing noted") + (g ? " · " + g + (g===1?" gap":" gaps") : "");
+}
 function renderHours(force){
-  const card = $("hoursCard"), cur = new Date().getHours(), k = dayKey(Date.now());
-  if (cur < H_FIRST){ card.hidden = true; return; }
-  card.hidden = false;
-  if (hoursTyping() && !force) return;
-  const last = Math.min(cur, H_LAST), hrs = [], filled = hoursOf(k);
-  for (let h=H_FIRST; h<=last; h++) hrs.push(h);
-  const nFilled = hrs.filter(h=>(filled[h]||"").trim()).length;
-  $("hoursMeta").textContent = nFilled + " of " + hrs.length + " filled";
-  const shown = hoursShowAll ? hrs : hrs.filter(h => h===cur || !(filled[h]||"").trim());
-  $("hoursList").innerHTML = shown.map(h => hourRow(k, h, (h===cur ? "now" : "") + (h<cur && !(filled[h]||"").trim() ? " missing" : ""))).join("")
-    || `<p class="note" style="padding:6px 0">All hours so far are filled.</p>`;
-  const hidden = hrs.length - shown.length;
-  $("hoursAll").hidden = !hoursShowAll && !hidden;
-  $("hoursAll").textContent = hoursShowAll ? "Show only what's left" : "See all hours (" + hidden + " filled)";
+  if (blkEdit && blkEdit.where==="home" && !force) return;
+  const k = dayKey(Date.now());
+  $("hoursCard").innerHTML = `<div class="card-head"><span class="eyebrow">Your day</span><span class="card-meta">${dayLogMeta(k)}</span></div>` + dayLogHTML(k, "home");
 }
-$("hoursAll").onclick = ()=>{ hoursShowAll = !hoursShowAll; renderHours(true); };
-document.addEventListener("input", e=>{
-  const hk = e.target.dataset && e.target.dataset.hk; if (!hk) return;
-  const [k, h] = hk.split("|"); setHour(k, +h, e.target.value);
-  if (!$("hoursCard").hidden && k===dayKey(Date.now())){
-    const cur = new Date().getHours(), f = hoursOf(k); let n = 0, t = 0;
-    for (let x=H_FIRST; x<=Math.min(cur,H_LAST); x++){ t++; if ((f[x]||"").trim()) n++; }
-    $("hoursMeta").textContent = n + " of " + t + " filled";
+function refreshDayLog(where){ if (where==="home") renderHours(true); else render(); }
+function openBlock(e){
+  blkEdit = e; refreshDayLog(e.where);
+  const t = $("bText"); if (t){ t.focus(); }
+}
+document.addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-badd],[data-bgap],[data-bedit],[data-bsave],[data-bcancel],[data-bdel]"); if (!b) return;
+  if (b.dataset.badd){
+    const [k, where] = b.dataset.badd.split("|"), bl = blocksOf(k), today = k===dayKey(Date.now());
+    const lastEnd = bl.length ? tmin(bl[bl.length-1].to) : DAY_START;
+    const end = today ? Math.max(lastEnd + 15, Math.round(nowMin()/5)*5) : Math.min(lastEnd + 60, DAY_END - 1);
+    return openBlock({k, where, id:null, from:tfmt(lastEnd), to:tfmt(Math.min(end, DAY_END-1)), text:""});
+  }
+  if (b.dataset.bgap){ const [k,f,t,where] = b.dataset.bgap.split("|"); return openBlock({k, where, id:null, from:f, to:t, text:""}); }
+  if (b.dataset.bedit){
+    const [k,id,where] = b.dataset.bedit.split("|"), x = blocksOf(k).find(y=>y.id===id); if (!x) return;
+    return openBlock({k, where, id, from:x.from, to:x.to, text:x.text});
+  }
+  const e = blkEdit; if (!e) return;
+  if (b.dataset.bcancel){ blkEdit = null; return refreshDayLog(e.where); }
+  if (b.dataset.bdel){ saveBlocks(e.k, blocksOf(e.k).filter(y=>y.id!==e.id)); blkEdit = null; toast("Block deleted"); return refreshDayLog(e.where); }
+  if (b.dataset.bsave){
+    const from = $("bFrom").value, to = $("bTo").value, text = $("bText").value.trim();
+    if (!from || !to) return toast("Set both times.");
+    if (tmin(to) <= tmin(from)) return toast("The end has to be after the start.");
+    if (!text) return toast("Write what you did.");
+    const list = blocksOf(e.k).filter(y=>y.id!==e.id);
+    const clash = list.find(y=>tmin(y.from) < tmin(to) && tmin(from) < tmin(y.to));
+    list.push({id: e.id || newId("b"), from, to, text});
+    saveBlocks(e.k, list); blkEdit = null;
+    toast(clash ? "Saved. It overlaps “" + clash.text + "”." : "Saved");
+    refreshDayLog(e.where);
   }
 });
-document.addEventListener("keydown", e=>{
-  if (e.key!=="Enter" || !(e.target.dataset && e.target.dataset.hk)) return;
-  e.preventDefault();
-  const all = [...(e.target.closest(".hlist")||document).querySelectorAll("[data-hk]")], i = all.indexOf(e.target);
-  if (all[i+1]) all[i+1].focus(); else e.target.blur();
-});
-document.addEventListener("focusout", e=>{
-  if (!(e.target.dataset && e.target.dataset.hk)) return;
-  setTimeout(()=>{ if (!hoursTyping() && route.view==="home") renderHours(true); }, 150);
-});
+document.addEventListener("keydown", ev=>{ if (ev.key==="Enter" && ev.target.id==="bText"){ ev.preventDefault(); const s = document.querySelector("[data-bsave]"); if (s) s.click(); } });
 
 function renderGrat(){
   const k = dayKey(Date.now()), list = (state.days[k] && state.days[k].grateful) || [];
@@ -812,17 +849,7 @@ function renderToday(){
 }
 
 function jHours(k){
-  const f = hoursOf(k), todayK = dayKey(Date.now());
-  const last = k===todayK ? Math.min(new Date().getHours(), H_LAST) : H_LAST;
-  const hrs = []; for (let h=H_FIRST; h<=last; h++) hrs.push(h);
-  const done = hrs.filter(h=>(f[h]||"").trim());
-  const head = `<div class="jhead"><span class="eyebrow">Hour by hour</span><span class="jmeta">${hrs.length ? done.length + " of " + hrs.length : ""}</span></div>`;
-  if (editingHours===k){
-    return `<section class="jsec">${head}<div class="hlist">${hrs.map(h=>hourRow(k, h, (f[h]||"").trim() ? "" : "missing")).join("")}</div>
-      <button type="button" class="linkbtn jlink" data-hdone="1">Done</button></section>`;
-  }
-  return `<section class="jsec">${head}${done.length ? `<ul class="hread">${done.map(h=>`<li><span class="ht">${hLabel(h)}</span><span class="hx">${esc(f[h].trim())}</span></li>`).join("")}</ul>` : ""}
-    <button type="button" class="linkbtn jlink" data-hedit="${k}">${done.length < hrs.length ? (done.length ? "Fill in the rest" : "+ Fill in the day") : "Edit hours"}</button></section>`;
+  return `<section class="jsec"><div class="jhead"><span class="eyebrow">Your day</span><span class="jmeta">${dayLogMeta(k)}</span></div>${dayLogHTML(k, "journal")}</section>`;
 }
 function renderJournal(){
   $("folderTitle").textContent = "Journal";
@@ -849,10 +876,10 @@ function renderJournal(){
     const t3done = t3.filter(x=>x.done).length;
     const gr = (state.days[k] && state.days[k].grateful) || [];
     const editing = editingDay===k;
-    const isOpen = editing || editingHours===k || openDays.has(k) || ss.some(s=>s.id===editingSession);
-    const hf = Object.values(hoursOf(k)).filter(v=>(v||"").trim()).length;
+    const isOpen = editing || (blkEdit && blkEdit.k===k && blkEdit.where==="journal") || openDays.has(k) || ss.some(s=>s.id===editingSession);
+    const nm = notedMin(k);
     return `<details class="day" data-day="${k}"${isOpen?" open":""}>
-      <summary><span class="dname">${label}</span><span class="dsum">${hf?`<span title="Hours logged in the day log">${hf} h noted</span>`:""}${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></summary>
+      <summary><span class="dname">${label}</span><span class="dsum">${nm?`<span title="Time noted in your day log">${hm(nm*60000)} noted</span>`:""}${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${ss.length?hm(Math.max(0,tot)):""}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${jHours(k)}
         ${t3.length?`<section class="jsec"><div class="jhead"><span class="eyebrow">3 things</span><span class="jmeta">${t3done} of ${t3.length} done</span></div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></section>`:""}
@@ -1116,7 +1143,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !hoursTyping() && !editingHours && route.view!=="failures" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1262,8 +1289,6 @@ $("list").addEventListener("click", ev=>{
     msConfirm = null; return render();
   }
   if ((b = pick("[data-mskeep]"))){ msConfirm = null; return render(); }
-  if ((b = pick("[data-hedit]"))){ editingHours = b.dataset.hedit; render(); const first = $("list").querySelector(`.hrow.missing [data-hk]`) || $("list").querySelector("[data-hk]"); if (first) first.focus(); return; }
-  if ((b = pick("[data-hdone]"))){ editingHours = null; toast("Hours saved"); return render(); }
   if ((b = pick("[data-t3j]"))){
     const [k,i] = b.dataset.t3j.split("|"); const it = state.days[k] && state.days[k].top3 && state.days[k].top3[+i];
     if (it){ it.done = !it.done; persist(); }
@@ -1317,7 +1342,7 @@ $("list").addEventListener("click", ev=>{
 });
 
 /* ---------- daily entry ---------- */
-function dayHasContent(d){ return !!(d && (d.note || (d.top3 && d.top3.length) || (d.grateful && d.grateful.length) || (d.hours && Object.keys(d.hours).length))); }
+function dayHasContent(d){ return !!(d && (d.note || (d.top3 && d.top3.length) || (d.grateful && d.grateful.length) || (d.blocks && d.blocks.length))); }
 function saveDay(k, text){
   const t = (text||"").trim();
   const d = state.days[k] || {};
@@ -1475,7 +1500,7 @@ $("folderDeleteYes").onclick=()=>{
   delete state.folders[fid]; persist(); toast("Folder deleted, goals kept"); closeFolderForm(); go("goals");
 };
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
-$("journalBtn").onclick=()=>{ editingDay = null; editingHours = null; go("journal"); };
+$("journalBtn").onclick=()=>{ editingDay = null; blkEdit = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
