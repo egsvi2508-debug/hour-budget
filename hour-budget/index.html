@@ -274,6 +274,35 @@ details.sitem summary .sval{white-space:nowrap}
 .card-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .card-more{align-self:flex-start;font-size:13px;min-height:28px;padding:0}
 .notes .entry{margin:0}
+/* predictions */
+.pred{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.pred .ptitle{font-family:var(--display);font-weight:500;font-size:17px;margin:0;line-height:1.3}
+.pred .pquote{margin:0;padding:2px 0 2px 12px;border-left:2px solid var(--line);font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+.pred .pchips{display:flex;gap:6px;flex-wrap:wrap}
+.pred .pchips button{font-size:13px;min-height:32px;padding:4px 10px;border-radius:99px;color:var(--muted)}
+.pred .prow{display:flex;gap:8px;align-items:center}
+.pred .prow input{flex:1;min-width:0}
+.pred .pskip{font-size:13px;color:var(--muted);min-height:28px;padding:0;font-weight:400}
+.pred .phm{display:flex;gap:8px}
+.pred .phm button{flex:1;font-weight:600}
+.pred .phm .hit{border-color:var(--accent);color:var(--accent)}
+.pred .phm .miss{border-color:var(--danger);color:var(--danger)}
+.pred textarea{min-height:90px}
+.pred .pmisses{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto;font-size:14px}
+.pred .pmisses li{border-bottom:1px solid var(--line);padding-bottom:6px}
+.pred .pmisses .pd{font-family:var(--mono);font-size:12px;color:var(--muted);margin-right:6px}
+.pr-res{font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.pr-res.hit{color:var(--accent);border-color:var(--accent)}
+.pr-res.miss{color:var(--danger);border-color:var(--danger)}
+.pr-res.open{color:var(--muted)}
+.prlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.prlist li{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.prlist .prtop{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.prlist .prtext{overflow-wrap:anywhere}
+.prlist .prwhy{font-size:13px;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
+.prstats{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prstats span{display:flex;flex-direction:column;gap:2px}
+.prstats b{color:var(--ink);font-family:var(--mono);font-weight:500;font-size:15px}
 /* formulas */
 .fxform{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
 .fxform textarea{min-height:76px;font-family:var(--mono);font-size:14px}
@@ -377,6 +406,7 @@ details.sitem summary .sval{white-space:nowrap}
       <input id="nameFirst" maxlength="40" placeholder="Your name" autocomplete="given-name" style="flex:1;min-width:140px">
       <button type="button" id="nameFirstSave">Save</button>
     </div>
+    <div id="predSlot"></div>
     <div class="daypanel" id="todayCard">
       <div class="dp-label">Today</div>
       <div class="dp-big" id="todayTotal">0h 00m</div>
@@ -566,12 +596,12 @@ document.addEventListener("toggle", e=>{
 }, true);
 
 /* ---------- storage ---------- */
-function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}, failures:[], formulas:[]}; }
+function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}, failures:[], formulas:[], predictions:[], predReviews:[]}; }
 function load(){
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || !s.goals) return blank();
-  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || []; s.formulas = s.formulas || [];
+  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || []; s.formulas = s.formulas || []; s.predictions = s.predictions || []; s.predReviews = s.predReviews || [];
   // hour-by-hour entries become time blocks
   Object.values(s.days).forEach(d=>{
     if (!d.hours) return;
@@ -1155,7 +1185,7 @@ $("gratList").addEventListener("click", ev=>{
 
 function renderToday(){
   renderTop3();
-  renderGrat(); renderHours(); renderBackup();
+  renderGrat(); renderHours(); renderBackup(); renderPred();
   $("fxCount").textContent = state.formulas.length ? state.formulas.length + (state.formulas.length===1 ? " formula" : " formulas") : "";
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
@@ -1186,6 +1216,7 @@ function renderJournal(){
   [0,1].forEach(n=>{ const k = dayKey(Date.now() - n*DAY); byDay[k] = byDay[k] || []; });
   const msByDay = {};
   allGoals().forEach(g=>(g.milestones||[]).forEach(m=>{ if (m.doneAt){ const k = dayKey(m.doneAt); (msByDay[k]=msByDay[k]||[]).push({g,m}); byDay[k]=byDay[k]||[]; } }));
+  state.predictions.forEach(p=>{ byDay[p.date] = byDay[p.date] || []; });
   const keys = Object.keys(byDay).sort().reverse();
   $("folderStats").textContent = keys.length ? "Tap a day to open it." : "";
   if (!keys.length){
@@ -1193,7 +1224,7 @@ function renderJournal(){
     return;
   }
   const todayK = dayKey(Date.now());
-  $("list").innerHTML = `<div class="days">` + keys.map(k=>{
+  $("list").innerHTML = `<div class="days">` + predJournalHTML() + keys.map(k=>{
     const ss = byDay[k].slice().sort((a,b)=>sortKey(a).localeCompare(sortKey(b)) || a.at-b.at), work = ss.filter(s=>s.ms>0);
     const tot = ss.reduce((a,s)=>a+s.ms,0), avg = weightedAvg(work);
     const d = keyDate(k);
@@ -1209,6 +1240,7 @@ function renderJournal(){
       <summary><span class="dname">${label}</span><span class="dsum">${nm?`<span title="Time noted in your day log">${hm(nm*60000)} noted</span>`:""}${t3.length?`<span title="Priorities done">✓ ${t3done}/${t3.length}</span>`:""}${ss.length?hm(Math.max(0,tot)):""}${avg!=null?chip(avg):""}</span></summary>
       <div class="dbody">
         ${jHours(k)}
+        ${predFor(k) ? (p=>`<section class="jsec"><div class="jhead"><span class="eyebrow">Prediction</span><span class="pr-res ${p.result||"open"}">${p.result==="hit"?"Hit":p.result==="miss"?"Miss":"Open"}</span></div><p class="dentry">${esc(p.text)}</p>${p.why?`<p class="dentry" style="color:var(--muted);font-style:italic">${esc(p.why)}</p>`:""}</section>`)(predFor(k)) : ""}
         ${t3.length?`<section class="jsec"><div class="jhead"><span class="eyebrow">3 things</span><span class="jmeta">${t3done} of ${t3.length} done</span></div><ul class="t3j">${t3.map((x,i)=>`<li><button type="button" class="linkbtn mk ${x.done?"ok":"no"}" data-t3j="${k}|${i}" aria-label="${x.done?"Mark as not done":"Mark as done"}" style="min-height:0;padding:0">${x.done?"✓":"○"}</button><span>${esc(x.text)}</span></li>`).join("")}</ul></section>`:""}
         ${ss.length ? `<section class="jsec"><div class="jhead"><span class="eyebrow">Sessions</span><span class="jmeta">${hm(Math.max(0,tot))}${avg!=null?chip(avg):""}</span></div><ul class="sess">${ss.map(sessHTML).join("")}</ul></section>` : ""}
         ${msByDay[k]?`<section class="jsec"><div class="jhead"><span class="eyebrow">Milestones reached</span></div><ul class="gj">${msByDay[k].map(({g,m})=>`<li><span>${esc(m.name)} · ${esc(g.name)} · at ${isSess(g) ? "session " + (m.doneN||0) : hm(m.doneMs)}</span></li>`).join("")}</ul></section>`:""}
@@ -1832,6 +1864,110 @@ $("folderDeleteYes").onclick=()=>{
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; blkEdit = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
+/* ---------- predictions ---------- */
+const PRED_CHIPS = ["I'll practice __ hours", "I'll avoid __ until evening", "I'll react to __ by __"];
+let predLater = false, predDraft = "";
+function predFor(k){ return state.predictions.find(p=>p.date===k); }
+function predOpen(){ // oldest unanswered prediction that is due: any earlier day, or today after 20:00
+  const today = dayKey(Date.now()), h = new Date().getHours();
+  return state.predictions.filter(p=>!p.result && (p.date < today || (p.date===today && h >= 20))).sort((a,b)=>a.date.localeCompare(b.date))[0] || null;
+}
+function predReviewDue(){
+  if (state.settings.predReviewDone || !state.predictions.length) return false;
+  const first = state.predictions.map(p=>p.date).sort()[0];
+  return Date.now() >= keyDate(first).getTime() + 27*DAY; // day 28 counting the first day as day 1
+}
+function predRate(days){
+  const from = dayKey(Date.now() - (days-1)*DAY);
+  const done = state.predictions.filter(p=>p.date >= from && p.result);
+  const hits = done.filter(p=>p.result==="hit").length;
+  return {hits, n:done.length, txt: done.length ? hits + " of " + done.length + " (" + Math.round(hits/done.length*100) + "%)" : "–"};
+}
+function dateShort(k){ return keyDate(k).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"}); }
+function renderPred(){
+  const slot = $("predSlot"); if (!slot) return;
+  const a = document.activeElement; if (a && slot.contains(a) && (a.tagName==="INPUT" || a.tagName==="TEXTAREA")) return; // don't wipe what you're typing
+  const today = dayKey(Date.now()), h = new Date().getHours(), open = predOpen();
+  if (open && !predLater){
+    const when = open.date===today ? "today" : dateShort(open.date);
+    slot.innerHTML = `<section class="pred" aria-label="Prediction check">
+      <p class="ptitle">Did your prediction hold?</p>
+      <p class="note" style="margin:-4px 0 0">${open.date===today ? "This morning you predicted:" : "Your prediction for " + esc(when) + ":"}</p>
+      <p class="pquote">${esc(open.text)}</p>
+      <input id="predWhy" maxlength="160" placeholder="Why? (optional)" autocomplete="off">
+      <div class="phm"><button type="button" class="hit" data-pres="hit" data-pdate="${open.date}">Hit</button><button type="button" class="miss" data-pres="miss" data-pdate="${open.date}">Miss</button></div>
+      <button type="button" class="linkbtn pskip" data-plater="1" style="align-self:flex-start">Later</button>
+    </section>`;
+    return;
+  }
+  if (!predFor(today) && h < 14 && state.settings.predSkipped !== today){
+    slot.innerHTML = `<section class="pred" aria-label="Today's prediction">
+      <p class="ptitle">What's one prediction about yourself today?</p>
+      <div class="prow"><input id="predText" maxlength="160" placeholder="e.g. I'll practice 3 hours" autocomplete="off" enterkeyhint="done" value="${esc(predDraft)}"><button type="button" class="primary" id="predSave" style="flex:0;min-width:80px">Save</button></div>
+      <div class="pchips">${PRED_CHIPS.map((c,i)=>`<button type="button" data-pchip="${i}">${esc(c)}</button>`).join("")}</div>
+      <button type="button" class="linkbtn pskip" data-pskip="1" style="align-self:flex-start">Skip today</button>
+    </section>`;
+    return;
+  }
+  if (predReviewDue()){
+    const misses = state.predictions.filter(p=>p.result==="miss").sort((a,b)=>a.date.localeCompare(b.date));
+    slot.innerHTML = `<section class="pred" aria-label="Four-week review">
+      <p class="ptitle">4 weeks done. Read all your misses and write down 2–3 patterns.</p>
+      ${misses.length ? `<ul class="pmisses">${misses.map(p=>`<li><span class="pd">${dateShort(p.date)}</span>${esc(p.text)}${p.why?` <span class="prwhy" style="font-size:13px;color:var(--muted)">· ${esc(p.why)}</span>`:""}</li>`).join("")}</ul>` : `<p class="note" style="margin:0">No misses so far. Look at what made the hits work instead.</p>`}
+      <textarea id="predPatterns" maxlength="1500" placeholder="1. When … I tend to …&#10;2. &#10;3. "></textarea>
+      <div class="row"><button type="button" class="primary" id="predReviewSave" style="flex:0;min-width:110px">Save</button></div>
+    </section>`;
+    return;
+  }
+  slot.innerHTML = "";
+}
+function savePrediction(){
+  const t = $("predText").value.replace(/\s+/g," ").trim();
+  if (!t) return toast("Write a prediction or tap Skip today.");
+  if (t.includes("__")) return toast("Fill in the blanks first.");
+  state.predictions.push({date:dayKey(Date.now()), text:t, result:null, createdAt:Date.now()});
+  predDraft = ""; persist(); $("predText").blur(); renderPred(); toast("Prediction saved. Check back after 20:00.");
+}
+$("predSlot").addEventListener("click", ev=>{
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.id==="predSave") return savePrediction();
+  if (b.dataset.pchip != null){
+    const inp = $("predText"), v = PRED_CHIPS[+b.dataset.pchip];
+    inp.value = v; inp.focus(); const i = v.indexOf("__"); inp.setSelectionRange(i, i+2); return;
+  }
+  if (b.dataset.pskip){ state.settings.predSkipped = dayKey(Date.now()); persist(); renderPred(); return; }
+  if (b.dataset.plater){ predLater = true; renderPred(); return; }
+  if (b.dataset.pres){
+    const p = predFor(b.dataset.pdate); if (!p) return;
+    p.result = b.dataset.pres; p.answeredAt = Date.now();
+    const why = $("predWhy").value.trim(); if (why) p.why = why; else delete p.why;
+    persist(); renderPred(); toast(p.result==="hit" ? "Hit. Noted." : "Miss. Noted, that's useful too."); return;
+  }
+  if (b.id==="predReviewSave"){
+    const t = $("predPatterns").value.trim(); if (!t) return toast("Write at least one pattern.");
+    state.predReviews.push({date:dayKey(Date.now()), text:t, createdAt:Date.now()});
+    state.settings.predReviewDone = Date.now(); persist(); renderPred(); toast("Saved to your journal");
+  }
+});
+$("predSlot").addEventListener("input", ev=>{ if (ev.target.id==="predText") predDraft = ev.target.value; });
+$("predSlot").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && ev.target.id==="predText"){ ev.preventDefault(); savePrediction(); } });
+function predJournalHTML(){
+  if (!state.predictions.length && !state.predReviews.length) return "";
+  const r7 = predRate(7), r28 = predRate(28);
+  const list = state.predictions.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const reviews = state.predReviews.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  return `<details class="day" data-day="predictions"${openDays.has("predictions")?" open":""}>
+    <summary><span class="dname">Predictions</span><span class="dsum"><span>7 days ${r7.n ? Math.round(r7.hits/r7.n*100)+"%" : "–"}</span><span>28 days ${r28.n ? Math.round(r28.hits/r28.n*100)+"%" : "–"}</span></span></summary>
+    <div class="dbody">
+      <section class="jsec"><div class="jhead"><span class="eyebrow">Hit rate</span></div>
+        <div class="prstats"><span>Last 7 days <b>${r7.txt}</b></span><span>Last 28 days <b>${r28.txt}</b></span></div></section>
+      ${reviews.length ? `<section class="jsec"><div class="jhead"><span class="eyebrow">Patterns</span></div>${reviews.map(v=>`<div><div class="note" style="margin-bottom:2px">${dateShort(v.date)}</div><p class="dentry">${esc(v.text)}</p></div>`).join("")}</section>` : ""}
+      <section class="jsec"><div class="jhead"><span class="eyebrow">All predictions</span><span class="jmeta">${list.length}</span></div>
+        <ul class="prlist">${list.map(p=>`<li><div class="prtop"><span class="note">${dateShort(p.date)}</span><span class="pr-res ${p.result||"open"}">${p.result==="hit"?"Hit":p.result==="miss"?"Miss":"Open"}</span></div><span class="prtext">${esc(p.text)}</span>${p.why?`<span class="prwhy">${esc(p.why)}</span>`:""}</li>`).join("")}</ul></section>
+    </div>
+  </details>`;
+}
+
 /* ---------- backup ---------- */
 function daysSince(ts){ return Math.floor((Date.now() - ts) / DAY); }
 function backupLabel(){
