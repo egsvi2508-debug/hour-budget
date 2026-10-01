@@ -303,7 +303,10 @@ details.sitem summary .sval{white-space:nowrap}
 .brow .bt{flex:none;width:92px;font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .brow .bx{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.35}
 .brow.gap .bx{color:var(--muted);opacity:.7}
-.brow.auto{cursor:default}
+.brow.auto{cursor:pointer}
+.brow.auto.live{cursor:default}
+.bsess{font-size:14px;font-weight:600}
+.bsess .bicon{color:var(--accent);margin-right:6px}
 .brow.pause .bx{color:var(--muted)}
 .brow.pause .bicon{color:var(--run);margin-right:6px;font-size:12px}
 .brow.pause.live .bt{color:var(--run)}
@@ -932,8 +935,8 @@ function sessParts(k){
   const segs = [], pauses = [];
   const addSeg = (a, b, info) => { if (dayKey(a)!==k) return; const f = minOf(a), t = dayKey(b)===k ? minOf(b) : DAY_END; segs.push({f, t:Math.max(t, f+1), ...info}); };
   state.sessions.forEach(x=>{
-    if (!(x.ms>0) || dayKey(x.at)!==k || !(x.src==="timer" || x.when)) return;
-    const base = {name:x.goalName||"Goal", n:x.n};
+    if (!(x.ms>0) || dayKey(x.at)!==k || !(x.src==="timer" || x.when || x.end)) return;
+    const base = {name:x.goalName||"Goal", n:x.n, sid:x.id};
     if (x.when && x.src!=="timer"){ const f = tmin(x.when); segs.push({f, t:Math.min(f + Math.max(1, Math.round(x.ms/60000)), DAY_END), ...base, rating:x.rating}); return; }
     // a timer session's "when" only moves it if you changed the time on the rating sheet
     const shift = x.when ? (tmin(x.when) - minOf(x.at)) * 60000 : 0;
@@ -992,10 +995,11 @@ function saveBlocks(k, list){
 }
 function blockFormHTML(){
   const e = blkEdit;
-  return `<div class="bform">
+  return `<div class="bform">${e.sid ? `<div class="bsess"><span class="bicon" aria-hidden="true">⏱</span>${esc(e.label)} <span class="note">· learning session</span></div>` : ""}
     <div class="btimes"><input type="time" id="bFrom" value="${e.from}" aria-label="From"><span>to</span><input type="time" id="bTo" value="${e.to}" aria-label="To"></div>
-    <input id="bText" value="${esc(e.text||"")}" maxlength="200" placeholder="What did you do?" autocomplete="off" enterkeyhint="done">
-    <div class="row"><button type="button" class="primary" data-bsave="1" style="flex:0;min-width:100px">Save</button><button type="button" class="ghost" data-bcancel="1">Cancel</button>${e.id?`<button type="button" class="ghost" data-bdel="1" style="margin-left:auto">Delete</button>`:""}</div>
+    <input id="bText" value="${esc(e.text||"")}" maxlength="200" placeholder="${e.sid ? "Note (optional)" : "What did you do?"}" autocomplete="off" enterkeyhint="done">
+    ${e.sid && e.hasPauses ? `<p class="note" style="margin:0">Pauses inside the new times are kept; the rest are dropped.</p>` : ""}
+    <div class="row"><button type="button" class="primary" data-bsave="1" style="flex:0;min-width:100px">Save</button><button type="button" class="ghost" data-bcancel="1">Cancel</button>${e.id||e.sid ? (e.confirmDel ? `<button type="button" class="danger" data-bdel="1" style="margin-left:auto">${e.sid ? "Delete session" : "Delete"}</button>` : `<button type="button" class="ghost" data-bdelask="1" style="margin-left:auto">Delete…</button>`) : ""}</div>
   </div>`;
 }
 function dayLogHTML(k, where){
@@ -1003,7 +1007,11 @@ function dayLogHTML(k, where){
   const rows = [];
   bl.forEach(b=>rows.push({at:tmin(b.from), html: editingHere && blkEdit.id===b.id ? blockFormHTML()
     : `<button type="button" class="brow" data-bedit="${k}|${b.id}|${where}"><span class="bt">${b.from}–${b.to}</span><span class="bx">${esc(b.text)}</span></button>`}));
-  sessSpans(k).forEach(x=>rows.push({at:x.f, html:`<div class="brow auto${x.live?" live":""}"><span class="bt">${tfmt(x.f)}–${x.live ? "now" : tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏱</span>${esc(x.name)}${x.cont?" · continued":""}${x.n===1 && !x.cont?" · session ✓":""} ${chip(x.rating)}</span></div>`}));
+  sessSpans(k).forEach(x=>{
+    if (editingHere && x.sid && blkEdit.sid===x.sid){ if (!x.cont) rows.push({at:x.f, html:blockFormHTML()}); return; }
+    const inner = `<span class="bt">${tfmt(x.f)}–${x.live ? "now" : tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏱</span>${esc(x.name)}${x.cont?" · continued":""}${x.n===1 && !x.cont?" · session ✓":""} ${chip(x.rating)}</span>`;
+    rows.push({at:x.f, html: x.live || !x.sid ? `<div class="brow auto live">${inner}</div>` : `<button type="button" class="brow auto" data-bsess="${k}|${x.sid}|${where}">${inner}</button>`});
+  });
   openPauses(k).forEach(x=>rows.push({at:x.f + 0.5, html: x.live
     ? `<div class="brow pause live"><span class="bt">${tfmt(x.f)}–now</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Paused</span></div>`
     : `<button type="button" class="brow pause" data-bgap="${k}|${tfmt(x.f)}|${tfmt(x.t)}|${where}"><span class="bt">${tfmt(x.f)}–${tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Pause · ${hm((x.t-x.f)*60000).replace(/^0h /,"")} · what did you do?</span></button>`}));
@@ -1028,7 +1036,13 @@ function openBlock(e){
   const t = $("bText"); if (t){ t.focus(); }
 }
 document.addEventListener("click", ev=>{
-  const b = ev.target.closest("[data-badd],[data-bgap],[data-bedit],[data-bsave],[data-bcancel],[data-bdel]"); if (!b) return;
+  const b = ev.target.closest("[data-badd],[data-bgap],[data-bedit],[data-bsess],[data-bsave],[data-bcancel],[data-bdel],[data-bdelask]"); if (!b) return;
+  if (b.dataset.bsess){
+    const [k,sid,where] = b.dataset.bsess.split("|"), x = state.sessions.find(y=>y.id===sid); if (!x) return;
+    const segs = sessSpans(k).filter(y=>y.sid===sid); if (!segs.length) return;
+    return openBlock({k, where, sid, from:tfmt(segs[0].f), to:tfmt(segs[segs.length-1].t), text:x.note||"", label:x.goalName||"Goal", hasPauses:!!(x.pauses&&x.pauses.length)});
+  }
+  if (b.dataset.bdelask){ blkEdit.confirmDel = true; const keep = $("bText") && $("bText").value; refreshDayLog(blkEdit.where); if (keep!=null && $("bText")) $("bText").value = keep; return; }
   if (b.dataset.badd){
     const [k, where] = b.dataset.badd.split("|"), bl = blocksOf(k), today = k===dayKey(Date.now());
     const lastEnd = bl.length ? tmin(bl[bl.length-1].to) : DAY_START;
@@ -1042,11 +1056,27 @@ document.addEventListener("click", ev=>{
   }
   const e = blkEdit; if (!e) return;
   if (b.dataset.bcancel){ blkEdit = null; return refreshDayLog(e.where); }
-  if (b.dataset.bdel){ saveBlocks(e.k, blocksOf(e.k).filter(y=>y.id!==e.id)); blkEdit = null; toast("Block deleted"); return refreshDayLog(e.where); }
+  if (b.dataset.bdel){
+    if (e.sid){ const x = state.sessions.find(y=>y.id===e.sid); if (x){ removeSessions([x]); persist(); } blkEdit = null; toast("Session deleted"); return refreshDayLog(e.where); }
+    saveBlocks(e.k, blocksOf(e.k).filter(y=>y.id!==e.id)); blkEdit = null; toast("Block deleted"); return refreshDayLog(e.where);
+  }
   if (b.dataset.bsave){
     const from = $("bFrom").value, to = $("bTo").value, text = $("bText").value.trim();
     if (!from || !to) return toast("Set both times.");
     if (tmin(to) <= tmin(from)) return toast("The end has to be after the start.");
+    if (e.sid){
+      const x = state.sessions.find(y=>y.id===e.sid); if (!x){ blkEdit = null; return refreshDayLog(e.where); }
+      const day0 = keyDate(e.k).getTime(), at = day0 + tmin(from)*60000, end = day0 + tmin(to)*60000;
+      const ps = (x.pauses||[]).filter(([a,c])=>a>=at && c<=end), pausedMs = ps.reduce((n,[a,c])=>n + c - a, 0);
+      const ms = end - at - pausedMs;
+      if (ms < 60000) return toast("A session needs at least a minute.");
+      const g = state.goals[x.goalId]; if (g) g.doneMs = Math.max(0, (g.doneMs||0) + ms - x.ms);
+      x.at = at; x.end = end; x.ms = ms; delete x.when;
+      if (ps.length) x.pauses = ps; else delete x.pauses;
+      if (text) x.note = text; else delete x.note;
+      persist(); blkEdit = null; toast("Session updated · " + hm(ms));
+      return refreshDayLog(e.where);
+    }
     if (!text) return toast("Write what you did.");
     const list = blocksOf(e.k).filter(y=>y.id!==e.id);
     const clash = list.find(y=>tmin(y.from) < tmin(to) && tmin(from) < tmin(y.to));
@@ -1275,7 +1305,7 @@ function sessHTML(s){
 function removeSessions(list){
   list.forEach(s=>{
     const g = state.goals[s.goalId];
-    if (g) g.doneMs = Math.max(0, (g.doneMs||0) - s.ms);
+    if (g){ g.doneMs = Math.max(0, (g.doneMs||0) - s.ms); if (s.n===1 && g.doneN>0) g.doneN -= 1; }
   });
   const ids = new Set(list.map(s=>s.id));
   state.sessions = state.sessions.filter(s=>!ids.has(s.id));
