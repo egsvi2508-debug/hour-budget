@@ -339,6 +339,9 @@ details.sitem summary .sval{white-space:nowrap}
 .bk{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
 .bkbox{display:flex;flex-direction:column;gap:8px;background:var(--accent-soft);border-radius:12px;padding:12px}
 .bknudge{border-color:var(--run)}
+#predBtn.due{border-color:var(--accent);border-width:1.5px}
+#predBtn.due .rl-sub{color:var(--accent);font-weight:600}
+.pwin{font-size:13px;color:var(--muted);background:var(--track);border-radius:10px;padding:10px 12px;margin:0}
 .bknudge svg{stroke:var(--run)}
 .bpause{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .bpause input{flex:1;min-width:92px;font-family:var(--mono)}
@@ -1193,7 +1196,8 @@ $("gratList").addEventListener("click", ev=>{
 function renderToday(){
   renderTop3();
   renderGrat(); renderHours(); renderBackup(); renderPred();
-  { const r = predRate(7), tp = predFor(dayKey(Date.now())); $("predSub").textContent = tp ? (tp.result ? (tp.result==="hit" ? "today: hit" : "today: miss") : "today: open") : (r.n ? "7 days " + Math.round(r.hits/r.n*100) + "%" : ""); }
+  $("predSub").textContent = predStatus();
+  $("predBtn").classList.toggle("due", (inWriteWindow() && !predFor(dayKey(Date.now())) && state.settings.predSkipped!==dayKey(Date.now())) || (inCheckWindow() && state.predictions.some(p=>!p.result)));
   $("fxCount").textContent = state.formulas.length ? state.formulas.length + (state.formulas.length===1 ? " formula" : " formulas") : "";
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
@@ -1876,9 +1880,20 @@ $("goalsBtn").onclick=()=>go("goals");
 const PRED_CHIPS = ["I'll practice __ hours", "I'll avoid __ until evening", "I'll react to __ by __"];
 let predLater = false, predDraft = "";
 function predFor(k){ return state.predictions.find(p=>p.date===k); }
-function predOpen(){ // oldest unanswered prediction that is due: any earlier day, or today after 20:00
-  const today = dayKey(Date.now()), h = new Date().getHours();
-  return state.predictions.filter(p=>!p.result && (p.date < today || (p.date===today && h >= 20))).sort((a,b)=>a.date.localeCompare(b.date))[0] || null;
+/* time windows: write 08:00–10:00, check 20:00–23:00 */
+function inWriteWindow(){ const h = new Date().getHours(); return h >= 8 && h < 10; }
+function inCheckWindow(){ const h = new Date().getHours(); return h >= 20 && h < 23; }
+function predOpen(){ // oldest unanswered prediction; only during the evening check window
+  if (!inCheckWindow()) return null;
+  return state.predictions.filter(p=>!p.result).sort((a,b)=>a.date.localeCompare(b.date))[0] || null;
+}
+function predStatus(){ // short line for the home row
+  const today = dayKey(Date.now()), tp = predFor(today), h = new Date().getHours();
+  if (tp && tp.result) return "today: " + tp.result;
+  if (inCheckWindow() && state.predictions.some(p=>!p.result)) return "check now · until 23:00";
+  if (tp) return h < 20 ? "check tonight 20–23" : "check tomorrow 20–23";
+  if (inWriteWindow()) return state.settings.predSkipped===today ? "skipped today" : "write now · until 10:00";
+  return h < 8 ? "opens 8:00–10:00" : "next: tomorrow 8–10";
 }
 function predReviewDue(){
   if (state.settings.predReviewDone || !state.predictions.length) return false;
@@ -1900,7 +1915,7 @@ function renderPred(){
     const when = open.date===today ? "today" : dateShort(open.date);
     slot.innerHTML = `<section class="pred" aria-label="Prediction check">
       <p class="ptitle">Did your prediction hold?</p>
-      <p class="note" style="margin:-4px 0 0">${open.date===today ? "This morning you predicted:" : "Your prediction for " + esc(when) + ":"}</p>
+      <p class="note" style="margin:-4px 0 0">${open.date===today ? "This morning you predicted:" : "Your prediction for " + esc(when) + ":"} <span style="white-space:nowrap">(open until 23:00)</span></p>
       <p class="pquote">${esc(open.text)}</p>
       <input id="predWhy" maxlength="160" placeholder="Why? (optional)" autocomplete="off">
       <div class="phm"><button type="button" class="hit" data-pres="hit" data-pdate="${open.date}">Hit</button><button type="button" class="miss" data-pres="miss" data-pdate="${open.date}">Miss</button></div>
@@ -1908,9 +1923,10 @@ function renderPred(){
     </section>`;
     return;
   }
-  if (!predFor(today) && h < 14 && state.settings.predSkipped !== today){
+  if (!predFor(today) && inWriteWindow() && state.settings.predSkipped !== today){
     slot.innerHTML = `<section class="pred" aria-label="Today's prediction">
       <p class="ptitle">What's one prediction about yourself today?</p>
+      <p class="note" style="margin:-6px 0 0">Open until 10:00</p>
       <div class="prow"><input id="predText" maxlength="160" placeholder="e.g. I'll practice 3 hours" autocomplete="off" enterkeyhint="done" value="${esc(predDraft)}"><button type="button" class="primary" id="predSave" style="flex:0;min-width:80px">Save</button></div>
       <div class="pchips">${PRED_CHIPS.map((c,i)=>`<button type="button" data-pchip="${i}">${esc(c)}</button>`).join("")}</div>
       <button type="button" class="linkbtn pskip" data-pskip="1" style="align-self:flex-start">Skip today</button>
@@ -1930,11 +1946,12 @@ function renderPred(){
   slot.innerHTML = "";
 }
 function savePrediction(){
+  if (!inWriteWindow()){ toast("Predictions can be written from 8:00 to 10:00."); return renderPred(); }
   const t = $("predText").value.replace(/\s+/g," ").trim();
   if (!t) return toast("Write a prediction or tap Skip today.");
   if (t.includes("__")) return toast("Fill in the blanks first.");
   state.predictions.push({date:dayKey(Date.now()), text:t, result:null, createdAt:Date.now()});
-  predDraft = ""; persist(); $("predText").blur(); renderPred(); toast("Prediction saved. Check back after 20:00.");
+  predDraft = ""; persist(); $("predText").blur(); render(); toast("Prediction saved. Check back after 20:00.");
 }
 $("predSlot").addEventListener("click", ev=>{
   const b = ev.target.closest("button"); if (!b) return;
@@ -1943,18 +1960,19 @@ $("predSlot").addEventListener("click", ev=>{
     const inp = $("predText"), v = PRED_CHIPS[+b.dataset.pchip];
     inp.value = v; inp.focus(); const i = v.indexOf("__"); inp.setSelectionRange(i, i+2); return;
   }
-  if (b.dataset.pskip){ state.settings.predSkipped = dayKey(Date.now()); persist(); renderPred(); return; }
+  if (b.dataset.pskip){ state.settings.predSkipped = dayKey(Date.now()); persist(); render(); return; }
   if (b.dataset.plater){ predLater = true; renderPred(); return; }
   if (b.dataset.pres){
+    if (!inCheckWindow()){ toast("Predictions can be checked from 20:00 to 23:00."); return renderPred(); }
     const p = predFor(b.dataset.pdate); if (!p) return;
     p.result = b.dataset.pres; p.answeredAt = Date.now();
     const why = $("predWhy").value.trim(); if (why) p.why = why; else delete p.why;
-    persist(); renderPred(); toast(p.result==="hit" ? "Hit. Noted." : "Miss. Noted, that's useful too."); return;
+    persist(); render(); toast(p.result==="hit" ? "Hit. Noted." : "Miss. Noted, that's useful too."); return;
   }
   if (b.id==="predReviewSave"){
     const t = $("predPatterns").value.trim(); if (!t) return toast("Write at least one pattern.");
     state.predReviews.push({date:dayKey(Date.now()), text:t, createdAt:Date.now()});
-    state.settings.predReviewDone = Date.now(); persist(); renderPred(); toast("Saved to your journal");
+    state.settings.predReviewDone = Date.now(); persist(); render(); toast("Saved to your journal");
   }
 });
 $("predSlot").addEventListener("input", ev=>{ if (ev.target.id==="predText") predDraft = ev.target.value; });
@@ -1967,8 +1985,11 @@ function renderPredPage(){
   $("folderStats").textContent = "One prediction about yourself a day, checked in the evening.";
   const today = dayKey(Date.now()), tp = predFor(today), r7 = predRate(7), r28 = predRate(28);
   let html = "";
+  const canWrite = inWriteWindow(), canCheck = inCheckWindow();
   // today
-  if (!tp || prEdit===today){
+  if ((!tp || prEdit===today) && !canWrite){
+    html += `<section class="pred"><p class="ptitle">Today</p><p class="pwin">${tp ? esc(tp.text) : "No prediction today."} ${new Date().getHours() < 8 ? "You can write today's prediction from 8:00 to 10:00." : "Predictions can be written from 8:00 to 10:00. Next window: tomorrow."}</p></section>`;
+  } else if (!tp || prEdit===today){
     html += `<section class="pred"><p class="ptitle">${tp ? "Edit today's prediction" : "What's one prediction about yourself today?"}</p>
       <div class="prow"><input id="ppText" maxlength="160" placeholder="e.g. I'll practice 3 hours" autocomplete="off" enterkeyhint="done" value="${esc(tp ? tp.text : "")}"><button type="button" class="primary" data-ppsave="1" style="flex:0;min-width:80px">Save</button></div>
       <div class="pchips">${PRED_CHIPS.map((c,i)=>`<button type="button" data-ppchip="${i}">${esc(c)}</button>`).join("")}</div>
@@ -1976,17 +1997,18 @@ function renderPredPage(){
   } else {
     html += `<section class="pred"><div class="prtop" style="display:flex;justify-content:space-between;align-items:center"><p class="ptitle">Today</p>${prResBadge(tp)}</div>
       <p class="pquote">${esc(tp.text)}</p>${tp.why ? `<p class="note" style="margin:0;font-style:italic">${esc(tp.why)}</p>` : ""}
-      ${tp.result ? "" : `<input id="ppWhy" maxlength="160" placeholder="Why? (optional)" autocomplete="off">`}
+      ${canCheck ? `${tp.result ? "" : `<input id="ppWhy" maxlength="160" placeholder="Why? (optional)" autocomplete="off">`}
       <div class="phm">${tp.result
         ? `<button type="button" data-ppclear="${today}">Change answer</button>`
-        : `<button type="button" class="hit" data-ppres="hit" data-ppdate="${today}">Hit</button><button type="button" class="miss" data-ppres="miss" data-ppdate="${today}">Miss</button>`}</div>
-      <button type="button" class="linkbtn pskip" data-ppedit="${today}" style="align-self:flex-start">Edit prediction</button></section>`;
+        : `<button type="button" class="hit" data-ppres="hit" data-ppdate="${today}">Hit</button><button type="button" class="miss" data-ppres="miss" data-ppdate="${today}">Miss</button>`}</div>`
+      : (tp.result ? "" : `<p class="pwin">You can check it tonight between 20:00 and 23:00.</p>`)}
+      ${canWrite && !tp.result ? `<button type="button" class="linkbtn pskip" data-ppedit="${today}" style="align-self:flex-start">Edit prediction</button>` : ""}</section>`;
   }
   // older ones still open
   const open = state.predictions.filter(p=>!p.result && p.date < today).sort((a,b)=>b.date.localeCompare(a.date));
   if (open.length){
     html += `<div class="fxtopic"><span>Still to check</span><span>${open.length}</span></div><ul class="fxlist">` + open.map(p=>`<li class="fxitem"><span class="note">${dateShort(p.date)}</span><span>${esc(p.text)}</span>
-      <div class="phm" style="display:flex;gap:8px"><button type="button" class="hit" style="flex:1;border-color:var(--accent);color:var(--accent);font-weight:600" data-ppres="hit" data-ppdate="${p.date}">Hit</button><button type="button" class="miss" style="flex:1;border-color:var(--danger);color:var(--danger);font-weight:600" data-ppres="miss" data-ppdate="${p.date}">Miss</button></div></li>`).join("") + `</ul>`;
+      ${!canCheck ? `<span class="note">Check between 20:00 and 23:00.</span>` : ""}<div class="phm" style="display:${canCheck?"flex":"none"};gap:8px"><button type="button" class="hit" style="flex:1;border-color:var(--accent);color:var(--accent);font-weight:600" data-ppres="hit" data-ppdate="${p.date}">Hit</button><button type="button" class="miss" style="flex:1;border-color:var(--danger);color:var(--danger);font-weight:600" data-ppres="miss" data-ppdate="${p.date}">Miss</button></div></li>`).join("") + `</ul>`;
   }
   // rates
   html += `<div class="fxtopic"><span>Hit rate</span></div><div class="fxitem"><div class="prstats"><span>Last 7 days <b>${r7.txt}</b></span><span>Last 28 days <b>${r28.txt}</b></span></div></div>`;
@@ -2005,7 +2027,7 @@ function renderPredPage(){
   // history
   const list = state.predictions.slice().sort((a,b)=>b.date.localeCompare(a.date));
   html += `<div class="fxtopic"><span>All predictions</span><span>${list.length}</span></div>`;
-  html += list.length ? `<div class="fxitem"><ul class="prlist">${list.map(p=>`<li><div class="prtop"><span class="note">${dateShort(p.date)}</span>${prResBadge(p)}</div><span class="prtext">${esc(p.text)}</span>${p.why?`<span class="prwhy">${esc(p.why)}</span>`:""}${p.result && p.date!==today ? `<button type="button" class="linkbtn pskip" data-ppclear="${p.date}" style="align-self:flex-start">Change answer</button>` : ""}</li>`).join("")}</ul></div>`
+  html += list.length ? `<div class="fxitem"><ul class="prlist">${list.map(p=>`<li><div class="prtop"><span class="note">${dateShort(p.date)}</span>${prResBadge(p)}</div><span class="prtext">${esc(p.text)}</span>${p.why?`<span class="prwhy">${esc(p.why)}</span>`:""}${p.result && p.date!==today && canCheck ? `<button type="button" class="linkbtn pskip" data-ppclear="${p.date}" style="align-self:flex-start">Change answer</button>` : ""}</li>`).join("")}</ul></div>`
     : `<p class="note">Nothing yet. Your first prediction will show up here.</p>`;
   $("list").innerHTML = html;
 }
@@ -2014,6 +2036,8 @@ $("list").addEventListener("click", ev=>{
   const b = ev.target.closest("button"); if (!b) return;
   const d = b.dataset;
   if (d.ppchip != null){ const inp = $("ppText"), v = PRED_CHIPS[+d.ppchip]; inp.value = v; inp.focus(); const i = v.indexOf("__"); inp.setSelectionRange(i, i+2); return; }
+  if ((d.ppsave || d.ppedit) && !inWriteWindow()){ toast("Predictions can be written from 8:00 to 10:00."); return renderPredPage(); }
+  if ((d.ppres || d.ppclear) && !inCheckWindow()){ toast("Predictions can be checked from 20:00 to 23:00."); return renderPredPage(); }
   if (d.ppsave){
     const t = $("ppText").value.replace(/\s+/g," ").trim();
     if (!t) return toast("Write a prediction first.");
