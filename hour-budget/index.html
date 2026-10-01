@@ -276,9 +276,14 @@ details.sitem summary .sval{white-space:nowrap}
 /* formulas */
 .fxform{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
 .fxform textarea{min-height:76px;font-family:var(--mono);font-size:14px}
-.fxtools{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
-.fxtools::-webkit-scrollbar{display:none}
-.fxtools button{flex:none;min-height:34px;min-width:38px;padding:4px 10px;font-size:15px;border-radius:9px}
+.fxkbd{display:flex;flex-direction:column;gap:8px}
+.fxtabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.fxtabs::-webkit-scrollbar{display:none}
+.fxtabs button{flex:none;border:0;border-radius:8px 8px 0 0;min-height:34px;padding:6px 10px;font-size:13px;color:var(--muted);background:transparent;border-bottom:2px solid transparent;margin-bottom:-1px}
+.fxtabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.fxkeys{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.fxkeys button{min-height:40px;padding:4px 2px;font-size:15px;border-radius:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fxkeys button:active{background:var(--accent-soft)}
 .fxprev{min-height:52px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;overflow-x:auto;display:flex;align-items:center;justify-content:center}
 .fxprev.empty{color:var(--muted);font-size:13px}
 .fxsearch{width:100%}
@@ -299,6 +304,9 @@ details.sitem summary .sval{white-space:nowrap}
 .brow .bx{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.35}
 .brow.gap .bx{color:var(--muted);opacity:.7}
 .brow.auto{cursor:default}
+.brow.pause .bx{color:var(--muted)}
+.brow.pause .bicon{color:var(--run);margin-right:6px;font-size:12px}
+.brow.pause.live .bt{color:var(--run)}
 .brow.auto .bx{color:var(--ink)}
 .brow.auto .bicon{color:var(--accent);margin-right:6px;font-size:13px}
 .brow.auto.live .bt{color:var(--run)}
@@ -770,6 +778,7 @@ function fxGroup(str, i){ // str[i] === "(" -> [inner, endIndex]
 }
 function toTex(src){
   let t = " " + src.trim() + " ";
+  t = t.replace(/\|\|([^|]+)\|\|/g, "\\left\\| $1 \\right\\|");
   t = t.replace(/<=>/g," \\iff ").replace(/=>/g," \\implies ").replace(/<=/g," \\le ").replace(/>=/g," \\ge ").replace(/!=/g," \\neq ").replace(/->/g," \\to ").replace(/\+-/g," \\pm ")
        .replace(/\binfinity\b|\boo\b/g," \\infty ").replace(/\.\.\./g," \\dots ")
        .replace(/\b(RR|NN|ZZ|QQ|CC)\b/g,(m,a)=>" \\mathbb{"+a[0]+"} ")
@@ -777,10 +786,10 @@ function toTex(src){
   t = t.replace(new RegExp("(^|[^\\\\a-zA-Z])(" + FX_WORDS.join("|") + ")(?![a-zA-Z])","g"), "$1\\$2 ");
   // _( ... ) and ^( ... ) and sqrt( ... ) and abs( ... )
   for (let guard=0; guard<50; guard++){
-    const m = t.match(/(_|\^|\\?sqrt|abs)\(/); if (!m) break;
+    const m = t.match(/(_|\^|\\?sqrt|abs|norm|vec)\(/); if (!m) break;
     const i = m.index + m[0].length - 1, g = fxGroup(t, i); if (!g) break;
-    const head = m[1]==="abs" ? "\\left|" : m[1].replace(/^\\?sqrt$/,"\\sqrt");
-    const body = m[1]==="abs" ? g[0] + "\\right|" : "{" + g[0] + "}";
+    const head = m[1]==="abs" ? "\\left|" : m[1]==="norm" ? "\\left\\|" : m[1]==="vec" ? "\\vec" : m[1].replace(/^\\?sqrt$/,"\\sqrt");
+    const body = m[1]==="abs" ? g[0] + "\\right|" : m[1]==="norm" ? g[0] + "\\right\\|" : "{" + g[0] + "}";
     t = t.slice(0, m.index) + head + (m[1]==="abs" ? "" : "") + body + t.slice(g[1]+1);
   }
   // simple fractions: a/b, (a+b)/(c), x^2/2
@@ -800,8 +809,25 @@ function texHTML(tex){
   try { return katex.renderToString(tex, {throwOnError:false, displayMode:true, strict:"ignore"}); }
   catch(e){ return `<span class="fxraw">${esc(tex)}</span>`; }
 }
-const FX_TOOLS = [["a/b","\\frac{}{}"],["√","\\sqrt{}"],["xⁿ","^{}"],["xₙ","_{}"],["Σ","\\sum_{k=1}^{n} "],["∫","\\int_{a}^{b} "],["lim","\\lim_{x \\to } "],["∞","\\infty "],["ε","\\varepsilon "],["δ","\\delta "],
-  ["≤","\\le "],["≥","\\ge "],["≠","\\neq "],["→","\\to "],["⇒","\\implies "],["∈","\\in "],["∀","\\forall "],["∃","\\exists "],["ℝ","\\mathbb{R}"],["ℕ","\\mathbb{N}"],["|x|","\\left| \\right|"]];
+/* maths keyboard: [label, LaTeX to insert]; the caret lands in the first {} */
+const FX_KEYS = {
+  "Basic": [["a⁄b","\\frac{}{}"],["√","\\sqrt{}"],["ⁿ√","\\sqrt[n]{}"],["x²","^{2}"],["xⁿ","^{}"],["xₙ","_{}"],["( )","\\left( @ \\right)"],["[ ]","\\left[ @ \\right]"],["{ }","\\left\\{ @ \\right\\}"],["|x|","\\left| @ \\right|"],
+    ["±","\\pm "],["·","\\cdot "],["×","\\times "],["÷","\\div "],["≠","\\neq "],["≈","\\approx "],["≤","\\le "],["≥","\\ge "],["≡","\\equiv "],["∝","\\propto "],["…","\\dots "],["°","^{\\circ}"],["%","\\% "],["text","\\text{}"]],
+  "Lin. algebra": [["‖v‖","\\left\\| @ \\right\\|"],["v⃗","\\vec{}"],["𝐯","\\mathbf{}"],["v̂","\\hat{}"],["Aᵀ","^{T}"],["A⁻¹","^{-1}"],["v·w","\\cdot "],["v×w","\\times "],["⟨,⟩","\\langle @, \\rangle"],["⊥","\\perp "],["∥","\\parallel "],
+    ["2×2","\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"],["3×3","\\begin{pmatrix} a & b & c \\\\ d & e & f \\\\ g & h & i \\end{pmatrix}"],["col","\\begin{pmatrix} x \\\\ y \\\\ z \\end{pmatrix}"],["det","\\det "],["|A|","\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}"],
+    ["rank","\\operatorname{rank} "],["span","\\operatorname{span}"],["ker","\\ker "],["im","\\operatorname{im} "],["dim","\\dim "],["Iₙ","I_{n}"],["0⃗","\\vec{0}"],["Σᵢ","\\sum_{i=1}^{n} "],["ℝⁿ","\\mathbb{R}^{n}"],["≅","\\cong "]],
+  "Calculus": [["lim","\\lim_{x \\to @} "],["Σ","\\sum_{k=1}^{n} "],["Π","\\prod_{k=1}^{n} "],["∫","\\int "],["∫ₐᵇ","\\int_{a}^{b} "],["∬","\\iint "],["d/dx","\\frac{d}{dx}"],["dy/dx","\\frac{dy}{dx}"],["∂","\\partial "],["∂/∂x","\\frac{\\partial}{\\partial x}"],
+    ["f′","'"],["∇","\\nabla "],["∞","\\infty "],["→","\\to "],["↦","\\mapsto "],["eˣ","e^{}"],["ln","\\ln "],["log","\\log "],["sin","\\sin "],["cos","\\cos "],["tan","\\tan "],["sup","\\sup "],["inf","\\inf "],["max","\\max "],["min","\\min "],["|x−a|<δ","\\left| x-a \\right| < \\delta "]],
+  "Sets": [["∈","\\in "],["∉","\\notin "],["⊂","\\subset "],["⊆","\\subseteq "],["∪","\\cup "],["∩","\\cap "],["∖","\\setminus "],["∅","\\emptyset "],["{x | }","\\{ x \\mid @ \\}"],["ℕ","\\mathbb{N}"],["ℤ","\\mathbb{Z}"],["ℚ","\\mathbb{Q}"],["ℝ","\\mathbb{R}"],["ℂ","\\mathbb{C}"],
+    ["∀","\\forall "],["∃","\\exists "],["∄","\\nexists "],["⇒","\\implies "],["⇔","\\iff "],["¬","\\neg "],["∧","\\land "],["∨","\\lor "],["f: A→B","f\\colon A \\to B"],["∘","\\circ "],["□","\\square"]],
+  "Greek": [["α","\\alpha "],["β","\\beta "],["γ","\\gamma "],["δ","\\delta "],["ε","\\varepsilon "],["ζ","\\zeta "],["η","\\eta "],["θ","\\theta "],["λ","\\lambda "],["μ","\\mu "],["ν","\\nu "],["ξ","\\xi "],["π","\\pi "],["ρ","\\rho "],["σ","\\sigma "],["τ","\\tau "],["φ","\\varphi "],["χ","\\chi "],["ψ","\\psi "],["ω","\\omega "],
+    ["Γ","\\Gamma "],["Δ","\\Delta "],["Θ","\\Theta "],["Λ","\\Lambda "],["Σ","\\Sigma "],["Φ","\\Phi "],["Ψ","\\Psi "],["Ω","\\Omega "]]
+};
+let fxTab = "Basic";
+function fxKeysHTML(){
+  return `<div class="fxtabs" role="tablist">${Object.keys(FX_KEYS).map(t=>`<button type="button" role="tab" aria-selected="${t===fxTab}" data-fxtab="${t}">${t}</button>`).join("")}</div>
+    <div class="fxkeys">${FX_KEYS[fxTab].map(([l,v],i)=>`<button type="button" data-fxins="${i}" aria-label="Insert ${esc(v.trim())}">${l}</button>`).join("")}</div>`;
+}
 function renderFormulas(){
   $("folderTitle").textContent = "Formulas";
   $("folderStats").textContent = "Type it your way or in LaTeX. It's typeset as you type.";
@@ -809,7 +835,7 @@ function renderFormulas(){
   const topics = [...new Set(state.formulas.map(f=>f.topic).filter(Boolean))].sort();
   let html = `<form class="fxform" id="fxForm" autocomplete="off">
     <label class="field"><span>${ed ? "Edit formula" : "New formula"}</span><textarea id="fxSrc" maxlength="2000" placeholder="e.g.  sum_(k=1)^n k = n(n+1)/2    or    \\lim_{x\\to 0} \\frac{\\sin x}{x} = 1" spellcheck="false" autocapitalize="off">${ed ? esc(ed.src) : ""}</textarea></label>
-    <div class="fxtools" id="fxTools">${FX_TOOLS.map(([l,v],i)=>`<button type="button" data-fxins="${i}" aria-label="Insert ${esc(v.trim())}">${l}</button>`).join("")}</div>
+    <div class="fxkbd" id="fxKbd">${fxKeysHTML()}</div>
     <div class="fxprev empty" id="fxPrev">Preview</div>
     <div class="two">
       <label class="field"><span>Name (optional)</span><input id="fxTitle" maxlength="100" placeholder="e.g. Gauss sum" value="${ed && ed.title ? esc(ed.title) : ""}"></label>
@@ -851,6 +877,7 @@ $("list").addEventListener("input", ev=>{
   if (ev.target.id==="fxSrc") updateFxPreview();
   if (ev.target.id==="fxSearch"){ fxFilter = ev.target.value; const pos = ev.target.selectionStart; renderFormulas(); const n = $("fxSearch"); if (n){ n.focus(); n.setSelectionRange(pos,pos); } }
 });
+$("list").addEventListener("mousedown", ev=>{ if (ev.target.closest("[data-fxins],[data-fxtab]")) ev.preventDefault(); });
 $("list").addEventListener("submit", ev=>{
   if (ev.target.id !== "fxForm") return;
   ev.preventDefault();
@@ -867,12 +894,15 @@ $("list").addEventListener("submit", ev=>{
   persist(); renderFormulas();
 });
 $("list").addEventListener("click", ev=>{
+  const tb = ev.target.closest("[data-fxtab]");
+  if (tb){ fxTab = tb.dataset.fxtab; $("fxKbd").innerHTML = fxKeysHTML(); return; }
   const b = ev.target.closest("[data-fxins],[data-fxedit],[data-fxcancel],[data-fxdel],[data-fxdelyes],[data-fxno]"); if (!b) return;
   if (b.dataset.fxins != null){
-    const ta = $("fxSrc"), ins = FX_TOOLS[+b.dataset.fxins][1];
+    const ta = $("fxSrc"), ins = FX_KEYS[fxTab][+b.dataset.fxins][1];
     const a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? ta.value.length;
-    ta.value = ta.value.slice(0,a) + ins + ta.value.slice(z);
-    const brace = ins.indexOf("{}"), caret = a + (brace>=0 ? brace+1 : ins.length);
+    const at = ins.indexOf("@"), text = ins.replace("@", "");
+    ta.value = ta.value.slice(0,a) + text + ta.value.slice(z);
+    const brace = text.indexOf("{}"), caret = a + (at>=0 ? at : brace>=0 ? brace+1 : text.length);
     ta.focus(); ta.setSelectionRange(caret, caret); updateFxPreview(); return;
   }
   if (b.dataset.fxedit){ fxEdit = b.dataset.fxedit; fxDel = null; renderFormulas(); window.scrollTo(0,0); $("fxSrc").focus(); }
@@ -891,32 +921,59 @@ function blocksOf(k){ return ((state.days[k] && state.days[k].blocks) || []).sli
 function nowMin(){ const d = new Date(); return d.getHours()*60 + d.getMinutes(); }
 const minOf = ts => { const d = new Date(ts); return d.getHours()*60 + d.getMinutes(); };
 /* learning sessions on that day, as time spans */
-function sessSpans(k){
-  const out = [];
+/* learning sessions on that day as time spans; pauses are cut out and listed separately */
+function splitByPauses(start, end, pauses){
+  const segs = [], ps = (pauses||[]).slice().sort((a,b)=>a[0]-b[0]); let cur = start;
+  ps.forEach(([a,b])=>{ if (a > cur) segs.push([cur, Math.min(a, end)]); cur = Math.max(cur, b); });
+  if (end > cur) segs.push([cur, end]);
+  return segs;
+}
+function sessParts(k){
+  const segs = [], pauses = [];
+  const addSeg = (a, b, info) => { if (dayKey(a)!==k) return; const f = minOf(a), t = dayKey(b)===k ? minOf(b) : DAY_END; segs.push({f, t:Math.max(t, f+1), ...info}); };
   state.sessions.forEach(x=>{
     if (!(x.ms>0) || dayKey(x.at)!==k || !(x.src==="timer" || x.when)) return;
-    const f = x.when ? tmin(x.when) : minOf(x.at);
-    const t = (!x.when && x.end && dayKey(x.end)===k) ? minOf(x.end) : f + Math.round(x.ms/60000);
-    out.push({f, t:Math.min(Math.max(t, f+1), DAY_END), name:x.goalName||"Goal", rating:x.rating, n:x.n});
+    const base = {name:x.goalName||"Goal", n:x.n};
+    if (x.when && x.src!=="timer"){ const f = tmin(x.when); segs.push({f, t:Math.min(f + Math.max(1, Math.round(x.ms/60000)), DAY_END), ...base, rating:x.rating}); return; }
+    // a timer session's "when" only moves it if you changed the time on the rating sheet
+    const shift = x.when ? (tmin(x.when) - minOf(x.at)) * 60000 : 0;
+    const at = x.at + shift, end = (x.end || (x.at + x.ms)) + shift, ps = (x.pauses||[]).map(([a,b])=>[a+shift, b+shift]);
+    const parts = splitByPauses(at, end, ps);
+    parts.forEach(([a,b],i)=>addSeg(a, b, {...base, cont:i>0, rating: i===parts.length-1 ? x.rating : undefined}));
+    ps.forEach(([a,b])=>{ if (dayKey(a)===k) pauses.push({f:minOf(a), t:Math.max(minOf(b), minOf(a)+1)}); });
   });
   const r = running();
   if (r && k===dayKey(Date.now())){
-    const st = r.sessionStart || r.runningSince;
-    if (st) out.push({f: dayKey(st)===k ? minOf(st) : 0, t: Math.max(nowMin(), minOf(st)+1), name:r.name, live:true, paused:!!r.pausedAt});
+    const st = r.sessionStart || r.runningSince, now = Date.now();
+    if (st){
+      const until = r.pausedAt || now, parts = splitByPauses(st, until, r.pauses);
+      parts.forEach(([a,b],i)=>addSeg(a, b, {name:r.name, cont:i>0, live: !r.pausedAt && i===parts.length-1}));
+      (r.pauses||[]).forEach(([a,b])=>{ if (dayKey(a)===k) pauses.push({f:minOf(a), t:Math.max(minOf(b), minOf(a)+1)}); });
+      if (r.pausedAt && dayKey(r.pausedAt)===k) pauses.push({f:minOf(r.pausedAt), t:Math.max(nowMin(), minOf(r.pausedAt)+1), live:true});
+    }
   }
-  return out;
+  return {segs, pauses};
 }
-function spansOf(k){
-  return blocksOf(k).map(b=>({f:tmin(b.from), t:tmin(b.to)})).concat(sessSpans(k)).sort((a,b)=>a.f-b.f || a.t-b.t);
+function sessSpans(k){ return sessParts(k).segs; }
+function openPauses(k){ // pauses not yet explained by a block
+  const bl = blocksOf(k).map(b=>[tmin(b.from), tmin(b.to)]);
+  return sessParts(k).pauses.filter(p=>{
+    const cov = bl.reduce((a,[f,t])=>a + Math.max(0, Math.min(t,p.t) - Math.max(f,p.f)), 0);
+    return p.live || cov < (p.t - p.f) / 2;
+  });
+}
+function spansOf(k, withPauses){
+  const sp = blocksOf(k).map(b=>({f:tmin(b.from), t:tmin(b.to)})).concat(sessSpans(k));
+  return (withPauses ? sp.concat(sessParts(k).pauses) : sp).sort((a,b)=>a.f-b.f || a.t-b.t);
 }
 function dayWindow(k){
-  const today = k===dayKey(Date.now()), sp = spansOf(k);
+  const today = k===dayKey(Date.now()), sp = spansOf(k, true);
   const first = sp.length ? Math.min(DAY_START, sp[0].f) : DAY_START;
   return {from:first, to: today ? nowMin() : DAY_END, today};
 }
 function gapsOf(k){
   const w = dayWindow(k), out = []; let cur = w.from;
-  spansOf(k).forEach(b=>{ if (b.f - cur >= 15 && b.f <= w.to) out.push([cur, Math.min(b.f, w.to)]); cur = Math.max(cur, b.t); });
+  spansOf(k, true).forEach(b=>{ if (b.f - cur >= 15 && b.f <= w.to) out.push([cur, Math.min(b.f, w.to)]); cur = Math.max(cur, b.t); });
   if (w.to - cur >= 15) out.push([cur, w.to]);
   return out;
 }
@@ -946,7 +1003,10 @@ function dayLogHTML(k, where){
   const rows = [];
   bl.forEach(b=>rows.push({at:tmin(b.from), html: editingHere && blkEdit.id===b.id ? blockFormHTML()
     : `<button type="button" class="brow" data-bedit="${k}|${b.id}|${where}"><span class="bt">${b.from}–${b.to}</span><span class="bx">${esc(b.text)}</span></button>`}));
-  sessSpans(k).forEach(x=>rows.push({at:x.f, html:`<div class="brow auto${x.live?" live":""}"><span class="bt">${tfmt(x.f)}–${x.live ? (x.paused ? "paused" : "now") : tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏱</span>${esc(x.name)}${x.n===1?" · session ✓":""} ${chip(x.rating)}</span></div>`}));
+  sessSpans(k).forEach(x=>rows.push({at:x.f, html:`<div class="brow auto${x.live?" live":""}"><span class="bt">${tfmt(x.f)}–${x.live ? "now" : tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏱</span>${esc(x.name)}${x.cont?" · continued":""}${x.n===1 && !x.cont?" · session ✓":""} ${chip(x.rating)}</span></div>`}));
+  openPauses(k).forEach(x=>rows.push({at:x.f + 0.5, html: x.live
+    ? `<div class="brow pause live"><span class="bt">${tfmt(x.f)}–now</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Paused</span></div>`
+    : `<button type="button" class="brow pause" data-bgap="${k}|${tfmt(x.f)}|${tfmt(x.t)}|${where}"><span class="bt">${tfmt(x.f)}–${tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Pause · ${hm((x.t-x.f)*60000).replace(/^0h /,"")} · what did you do?</span></button>`}));
   gaps.forEach(([f,t])=>rows.push({at:f, html:`<button type="button" class="brow gap" data-bgap="${k}|${tfmt(f)}|${tfmt(t)}|${where}"><span class="bt">${tfmt(f)}–${tfmt(t)}</span><span class="bx">+ what did you do?</span></button>`}));
   rows.sort((a,b)=>a.at-b.at);
   const adding = editingHere && !blkEdit.id;
@@ -1377,11 +1437,12 @@ function stopGoal(id){
   const full = isSess(g) && ms >= sessLen(g) - 1000;
   if (isSess(g)) ms = Math.min(ms, sessLen(g));
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
-  delete g.acc; delete g.pausedAt; delete g.sessionStart;
+  const pauses = (g.pauses || []).slice();
+  delete g.acc; delete g.pausedAt; delete g.sessionStart; delete g.pauses;
   const end = Math.min(Date.now(), start + elapsed0);
-  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; return s; }
+  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; if (pauses.length) s.pauses = pauses; return s; }
   if (ms < 60000) return 0;
-  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end;
+  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end; if (pauses.length) s.pauses = pauses;
   return s;
 }
 function stopFeedback(g, s){
@@ -1501,7 +1562,7 @@ $("list").addEventListener("click", ev=>{
   if (act==="edit") return openForm(id);
   if (act==="start"){
     Object.keys(state.goals).forEach(k=>{ if(k!==id) stopGoal(k); });
-    g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt;
+    g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt; g.pauses = [];
     if (isSess(g)) audioUnlock();
   } else if (act==="pause"){
     pauseGoal(g);
@@ -1700,7 +1761,12 @@ $("formulasBtn").onclick=()=>{ fxEdit = null; fxDel = null; go("formulas"); };
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
 function pauseGoal(g){ if (!g.runningSince) return; g.acc = elapsed(g); g.runningSince = null; g.pausedAt = Date.now(); }
-function resumeGoal(g){ if (!g.pausedAt) return; g.runningSince = Date.now(); delete g.pausedAt; }
+function resumeGoal(g){
+  if (!g.pausedAt) return;
+  const now = Date.now();
+  if (now - g.pausedAt >= 60000){ g.pauses = g.pauses || []; g.pauses.push([g.pausedAt, now]); toast("Pause of " + hm(now - g.pausedAt) + " noted in Your day"); }
+  g.runningSince = now; delete g.pausedAt;
+}
 $("runPause").onclick=()=>{
   const g = state.goals[$("runStop").dataset.id]; if (!g) return;
   if (g.pausedAt){ resumeGoal(g); if (isSess(g)) audioUnlock(); } else pauseGoal(g);
