@@ -467,6 +467,11 @@ details.sitem summary .sval{white-space:nowrap}
       <span class="rl-text">Back up your data</span><span class="rl-sub" id="bkNudgeSub"></span><span class="chev" aria-hidden="true">›</span>
     </button>
 
+    <button type="button" class="rowlink" id="predBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
+      <span class="rl-text">Predictions</span><span class="rl-sub" id="predSub"></span><span class="chev" aria-hidden="true">›</span>
+    </button>
+
     <button type="button" class="rowlink" id="formulasBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5H7l6 7-6 7h11"/></svg>
       <span class="rl-text">Formulas</span><span class="rl-sub" id="fxCount"></span><span class="chev" aria-hidden="true">›</span>
@@ -633,6 +638,7 @@ function parseHash(){
   if (location.hash === "#stats") return {view:"stats"};
   if (location.hash === "#failures") return {view:"failures"};
   if (location.hash === "#formulas") return {view:"formulas"};
+  if (location.hash === "#predictions") return {view:"predictions"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
   return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
@@ -739,12 +745,12 @@ function render(){
   const r = running();
   document.title = r ? runLabel(r) + " · " + r.name : "Hour Budget";
 
-  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures", fxView = route.view==="formulas";
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures", fxView = route.view==="formulas", prView = route.view==="predictions";
   $("homeView").hidden = !home; $("homeHeader").hidden = !home;
   if (!home){ $("menu").hidden = true; }
-  $("crumb").hidden = home; $("folderStats").hidden = !(journal || failView || fxView);
+  $("crumb").hidden = home; $("folderStats").hidden = !(journal || failView || fxView || prView);
   $("folderEditBtn").hidden = !folder;
-  $("addRow").hidden = home || journal || statsView || failView || fxView || !$("form").hidden || !$("folderForm").hidden;
+  $("addRow").hidden = home || journal || statsView || failView || fxView || prView || !$("form").hidden || !$("folderForm").hidden;
   $("addFolderBtn").hidden = !goalsView;
   $("backBtn").textContent = folder ? "‹ My goals" : "‹ Home";
 
@@ -753,6 +759,7 @@ function render(){
   if (statsView) return renderStats();
   if (failView) return renderFailures();
   if (fxView) return renderFormulas();
+  if (prView) return renderPredPage();
 
   if (folder){
     const f = state.folders[route.id], gs = goalsIn(route.id);
@@ -1186,6 +1193,7 @@ $("gratList").addEventListener("click", ev=>{
 function renderToday(){
   renderTop3();
   renderGrat(); renderHours(); renderBackup(); renderPred();
+  { const r = predRate(7), tp = predFor(dayKey(Date.now())); $("predSub").textContent = tp ? (tp.result ? (tp.result==="hit" ? "today: hit" : "today: miss") : "today: open") : (r.n ? "7 days " + Math.round(r.hits/r.n*100) + "%" : ""); }
   $("fxCount").textContent = state.formulas.length ? state.formulas.length + (state.formulas.length===1 ? " formula" : " formulas") : "";
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
@@ -1502,7 +1510,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && route.view!=="formulas" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && route.view!=="formulas" && route.view!=="predictions" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1951,6 +1959,89 @@ $("predSlot").addEventListener("click", ev=>{
 });
 $("predSlot").addEventListener("input", ev=>{ if (ev.target.id==="predText") predDraft = ev.target.value; });
 $("predSlot").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && ev.target.id==="predText"){ ev.preventDefault(); savePrediction(); } });
+/* ---------- predictions page (open any time) ---------- */
+let prEdit = null, prPatterns = false;
+function prResBadge(p){ return `<span class="pr-res ${p.result||"open"}">${p.result==="hit"?"Hit":p.result==="miss"?"Miss":"Open"}</span>`; }
+function renderPredPage(){
+  $("folderTitle").textContent = "Predictions";
+  $("folderStats").textContent = "One prediction about yourself a day, checked in the evening.";
+  const today = dayKey(Date.now()), tp = predFor(today), r7 = predRate(7), r28 = predRate(28);
+  let html = "";
+  // today
+  if (!tp || prEdit===today){
+    html += `<section class="pred"><p class="ptitle">${tp ? "Edit today's prediction" : "What's one prediction about yourself today?"}</p>
+      <div class="prow"><input id="ppText" maxlength="160" placeholder="e.g. I'll practice 3 hours" autocomplete="off" enterkeyhint="done" value="${esc(tp ? tp.text : "")}"><button type="button" class="primary" data-ppsave="1" style="flex:0;min-width:80px">Save</button></div>
+      <div class="pchips">${PRED_CHIPS.map((c,i)=>`<button type="button" data-ppchip="${i}">${esc(c)}</button>`).join("")}</div>
+      ${tp ? `<button type="button" class="linkbtn pskip" data-ppcancel="1" style="align-self:flex-start">Cancel</button>` : ""}</section>`;
+  } else {
+    html += `<section class="pred"><div class="prtop" style="display:flex;justify-content:space-between;align-items:center"><p class="ptitle">Today</p>${prResBadge(tp)}</div>
+      <p class="pquote">${esc(tp.text)}</p>${tp.why ? `<p class="note" style="margin:0;font-style:italic">${esc(tp.why)}</p>` : ""}
+      ${tp.result ? "" : `<input id="ppWhy" maxlength="160" placeholder="Why? (optional)" autocomplete="off">`}
+      <div class="phm">${tp.result
+        ? `<button type="button" data-ppclear="${today}">Change answer</button>`
+        : `<button type="button" class="hit" data-ppres="hit" data-ppdate="${today}">Hit</button><button type="button" class="miss" data-ppres="miss" data-ppdate="${today}">Miss</button>`}</div>
+      <button type="button" class="linkbtn pskip" data-ppedit="${today}" style="align-self:flex-start">Edit prediction</button></section>`;
+  }
+  // older ones still open
+  const open = state.predictions.filter(p=>!p.result && p.date < today).sort((a,b)=>b.date.localeCompare(a.date));
+  if (open.length){
+    html += `<div class="fxtopic"><span>Still to check</span><span>${open.length}</span></div><ul class="fxlist">` + open.map(p=>`<li class="fxitem"><span class="note">${dateShort(p.date)}</span><span>${esc(p.text)}</span>
+      <div class="phm" style="display:flex;gap:8px"><button type="button" class="hit" style="flex:1;border-color:var(--accent);color:var(--accent);font-weight:600" data-ppres="hit" data-ppdate="${p.date}">Hit</button><button type="button" class="miss" style="flex:1;border-color:var(--danger);color:var(--danger);font-weight:600" data-ppres="miss" data-ppdate="${p.date}">Miss</button></div></li>`).join("") + `</ul>`;
+  }
+  // rates
+  html += `<div class="fxtopic"><span>Hit rate</span></div><div class="fxitem"><div class="prstats"><span>Last 7 days <b>${r7.txt}</b></span><span>Last 28 days <b>${r28.txt}</b></span></div></div>`;
+  // patterns
+  const reviews = state.predReviews.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  html += `<div class="fxtopic"><span>Patterns</span><span>${reviews.length || ""}</span></div>`;
+  if (prPatterns){
+    const misses = state.predictions.filter(p=>p.result==="miss").sort((a,b)=>b.date.localeCompare(a.date));
+    html += `<section class="pred">${misses.length ? `<p class="note" style="margin:0">Your misses:</p><ul class="pmisses">${misses.map(p=>`<li><span class="pd">${dateShort(p.date)}</span>${esc(p.text)}${p.why?` · <i>${esc(p.why)}</i>`:""}</li>`).join("")}</ul>` : ""}
+      <textarea id="ppPatterns" maxlength="1500" placeholder="1. When … I tend to …&#10;2. &#10;3. "></textarea>
+      <div class="row"><button type="button" class="primary" data-pppatsave="1" style="flex:0;min-width:100px">Save</button><button type="button" class="ghost" data-pppatcancel="1">Cancel</button></div></section>`;
+  } else {
+    html += reviews.map(v=>`<div class="fxitem"><span class="note">${dateShort(v.date)}</span><p class="dentry">${esc(v.text)}</p></div>`).join("")
+      + `<button type="button" class="linkbtn jlink" data-pppat="1" style="margin-top:6px">+ Write down patterns</button>`;
+  }
+  // history
+  const list = state.predictions.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  html += `<div class="fxtopic"><span>All predictions</span><span>${list.length}</span></div>`;
+  html += list.length ? `<div class="fxitem"><ul class="prlist">${list.map(p=>`<li><div class="prtop"><span class="note">${dateShort(p.date)}</span>${prResBadge(p)}</div><span class="prtext">${esc(p.text)}</span>${p.why?`<span class="prwhy">${esc(p.why)}</span>`:""}${p.result && p.date!==today ? `<button type="button" class="linkbtn pskip" data-ppclear="${p.date}" style="align-self:flex-start">Change answer</button>` : ""}</li>`).join("")}</ul></div>`
+    : `<p class="note">Nothing yet. Your first prediction will show up here.</p>`;
+  $("list").innerHTML = html;
+}
+$("list").addEventListener("click", ev=>{
+  if (route.view!=="predictions") return;
+  const b = ev.target.closest("button"); if (!b) return;
+  const d = b.dataset;
+  if (d.ppchip != null){ const inp = $("ppText"), v = PRED_CHIPS[+d.ppchip]; inp.value = v; inp.focus(); const i = v.indexOf("__"); inp.setSelectionRange(i, i+2); return; }
+  if (d.ppsave){
+    const t = $("ppText").value.replace(/\s+/g," ").trim();
+    if (!t) return toast("Write a prediction first.");
+    if (t.includes("__")) return toast("Fill in the blanks first.");
+    const k = dayKey(Date.now()), p = predFor(k);
+    if (p) p.text = t; else state.predictions.push({date:k, text:t, result:null, createdAt:Date.now()});
+    prEdit = null; persist(); renderPredPage(); toast(p ? "Prediction updated" : "Prediction saved"); return;
+  }
+  if (d.ppcancel){ prEdit = null; return renderPredPage(); }
+  if (d.ppedit){ prEdit = d.ppedit; renderPredPage(); const i = $("ppText"); if (i) i.focus(); return; }
+  if (d.ppres){
+    const p = predFor(d.ppdate); if (!p) return;
+    p.result = d.ppres; p.answeredAt = Date.now();
+    const w = $("ppWhy"); if (w && d.ppdate===dayKey(Date.now()) && w.value.trim()) p.why = w.value.trim();
+    persist(); renderPredPage(); toast(p.result==="hit" ? "Hit. Noted." : "Miss. Noted, that's useful too."); return;
+  }
+  if (d.ppclear){ const p = predFor(d.ppclear); if (p){ p.result = null; delete p.answeredAt; persist(); } return renderPredPage(); }
+  if (d.pppat){ prPatterns = true; renderPredPage(); const t = $("ppPatterns"); if (t) t.focus(); return; }
+  if (d.pppatcancel){ prPatterns = false; return renderPredPage(); }
+  if (d.pppatsave){
+    const t = $("ppPatterns").value.trim(); if (!t) return toast("Write at least one pattern.");
+    state.predReviews.push({date:dayKey(Date.now()), text:t, createdAt:Date.now()});
+    if (predReviewDue()) state.settings.predReviewDone = Date.now();
+    prPatterns = false; persist(); renderPredPage(); toast("Patterns saved"); return;
+  }
+});
+$("list").addEventListener("keydown", ev=>{ if (route.view==="predictions" && ev.key==="Enter" && ev.target.id==="ppText"){ ev.preventDefault(); const sb = document.querySelector("[data-ppsave]"); if (sb) sb.click(); } });
+
 function predJournalHTML(){
   if (!state.predictions.length && !state.predReviews.length) return "";
   const r7 = predRate(7), r28 = predRate(28);
@@ -2027,6 +2118,7 @@ $("bkFile").onchange = async ()=>{
   };
 };
 
+$("predBtn").onclick=()=>{ prEdit = null; prPatterns = false; go("predictions"); };
 $("formulasBtn").onclick=()=>{ fxEdit = null; fxDel = null; go("formulas"); };
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
