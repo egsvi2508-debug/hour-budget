@@ -258,6 +258,7 @@ details.med > summary .dsum{text-align:right;white-space:nowrap}
 .med p{margin:0;font-size:14px;line-height:1.5}
 .med ol{margin:0;padding-left:20px;font-size:14px;line-height:1.5;display:flex;flex-direction:column;gap:4px}
 .med .msrc{font-size:12px;color:var(--muted)}
+.med .mpg{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}
 .dbody{padding:14px 16px;display:flex;flex-direction:column;gap:0}
 .dbody .jsec + .jsec{margin-top:12px}
 .sess{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -2083,44 +2084,44 @@ $("list").addEventListener("keydown", ev=>{ if (route.view==="predictions" && ev
 /* ---------- meditation exercises (from Inner Engineering, in short) ---------- */
 const MEDS = [
   {t:"Stillness", when:"5–7 min · daily",
-   intro:"Sit still with an upright spine and let your attention settle along with your body.",
-   steps:["Sit comfortably with your spine erect. Use a cushion or wall for support if you need it.","Stop moving. Let your attention slowly become still too.","Stay like this for 5–7 minutes."],
-   note:"Over time you'll notice your breathing slows down on its own. Don't force it.", src:""},
+   intro:"Sit still with an erect spine and let your attention become still too.",
+   steps:["Sit in any comfortable posture, spine erect, supported if necessary.","Stay still and let your attention slowly grow still as well.","Do this for 5–7 minutes a day."],
+   note:"The book says your breath will slow down. It stresses this isn't about forcing or holding the breath.", src:"pp. 60–61"},
   {t:"One sensation, 11 minutes", when:"11 min · 3× a day",
-   intro:"Keep your attention on one physical sensation while you go on with your day.",
-   steps:["Pick one thing: your breath, heartbeat, pulse, or even your little finger.","Hold your attention on it for 11 minutes. You can keep doing whatever you're doing.","When your attention drifts, just bring it back. Losing it doesn't matter."],
-   note:"Aim for at least 3 rounds a day. The point is moving from thinking about life to directly noticing it.", src:""},
-  {t:"Upright spine", when:"Through the day",
-   intro:"Notice how you hold your body, and sit with your spine erect for longer stretches.",
-   steps:["Look at people around you who seem clear and calm, and watch how they carry their body.","Whenever you sit (practice, lectures, desk), sit with your spine erect.","Build it up toward a few hours a day."],
-   note:"Easy to combine with piano practice and study sessions.", src:""},
+   intro:"Pay attention to life through experience, not through thinking or emotion.",
+   steps:["Choose one thing about yourself: breath, heartbeat, pulse, or little finger.","Pay attention to it for 11 minutes at a time, at least 3 times a day. You can keep doing whatever you're doing.","If you lose attention, it doesn't matter. Just refocus."],
+   note:"According to the book, this moves you from mental alertness to awareness and changes the quality of your experience.", src:"p. 59"},
+  {t:"Upright spine", when:"A few hours a day",
+   intro:"How you hold your body shapes almost everything about you.",
+   steps:["Observe the people around you: those with clearer perception often carry their body with a certain poise.","Sit with your spine erect for a few hours a day."],
+   note:"The book says even a little practice makes a big difference to your life.", src:"p. 59"},
   {t:"Silent meal", when:"15 min · next meal",
-   intro:"Eat the first part of a meal without talking, fully attentive to what you take in.",
-   steps:["At your next meal, don't talk to anyone for the first 15 minutes.","Pay full attention to the food, the water you drink, and the air you breathe.","Treat each bite as something that is becoming part of you."],
-   note:"", src:"p. 42"},
+   intro:"Experiment instead of just believing what you read.",
+   steps:["At your next meal, don't talk to anyone for the first 15 minutes.","Be consciously responsive to the food you eat, the air you breathe, and the water you drink.","Don't take the food lightly; respond to it with full attention."],
+   note:"The book's point: food gives itself up completely to become part of you.", src:"pp. 41–42"},
   {t:"Limitless responsibility", when:"All day · hourly",
-   intro:"Carry one idea through the whole day without saying it out loud.",
-   steps:["Hold the idea: “My responsibility is limitless; if I am willing, I can respond to everything.”","Keep it in mind until the moment you fall asleep, and recall it first thing when you wake up.","Remind yourself every hour. Try to hold it for one full minute at a time."],
-   note:"Your attention will keep slipping. That's normal; just come back to it.", src:"p. 42"},
+   intro:"Carry one idea through the whole day, without saying it aloud.",
+   steps:["Hold the idea that your responsibility is limitless: if you are willing, you can respond to everything.","Stay conscious of it until the moment you fall asleep, and remind yourself first thing when you wake up.","Your awareness will come and go. That's okay; remind yourself every hour."],
+   note:"The book says sustaining this awareness for even one full minute can be transformative.", src:"p. 42"},
   {t:"Breathing with a tree", when:"Few min · often",
-   intro:"Sit in front of a plant or tree and connect your breath with it.",
-   steps:["Sit for a few minutes facing a plant or tree.","Remind yourself: you breathe in what it breathes out, and it breathes in what you breathe out.","Repeat this several times a day."],
-   note:"After a few days, the sense of connection tends to spread to everything around you.", src:"p. 55"},
+   intro:"Build a connection with a plant or tree through your breath.",
+   steps:["Sit for a few minutes in front of a plant or tree.","Remind yourself that you inhale what it exhales, and exhale what it inhales.","Repeat this several times a day."],
+   note:"Even before you feel it, make the connection mentally. The book says after a few days you'll relate to everything around you differently.", src:"p. 55"},
   {t:"Before sleep: not me", when:"As you fall asleep",
-   intro:"Just before sleep, look at everything you consider “yourself” and let go of it.",
-   steps:["As you fall asleep, notice your thoughts, emotions, body, hair, skin, clothes.","Know that none of these is you.","Don't try to conclude what you are. Just keep the false conclusions away."],
-   note:"Going into sleep with this awareness is said to deepen over time, since nothing interferes during sleep.", src:"p. 57"}
+   intro:"Just before sleep, notice everything you think of as yourself.",
+   steps:["Pay attention to your thoughts, emotions, hair, skin, clothes, and so on.","Know that none of this is you.","Don't draw any conclusion about what you are; just keep false conclusions away."],
+   note:"The book says entering sleep with this awareness grows into a powerful experience over time, since nothing external interferes in sleep.", src:"p. 57"}
 ];
 function renderMeditation(){
   $("folderTitle").textContent = "Meditation";
-  $("folderStats").textContent = "Tap an exercise to open it.";
+  $("folderStats").textContent = "Tap an exercise to open it. Page numbers are from your Inner Engineering PDF.";
   $("list").innerHTML = `<div class="days">` + MEDS.map(m=>`<details class="day med">
-    <summary><span class="dname">${esc(m.t)}</span><span class="dsum">${esc(m.when)}</span></summary>
+    <summary><span class="dname"><span>${esc(m.t)}<span class="mpg">${esc(m.src)}</span></span></span><span class="dsum">${esc(m.when)}</span></summary>
     <div class="dbody" style="gap:12px">
       <p>${esc(m.intro)}</p>
       <ol>${m.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
       ${m.note ? `<p style="color:var(--muted)">${esc(m.note)}</p>` : ""}
-      <span class="msrc">Inner Engineering${m.src ? ", "+esc(m.src) : ""}</span>
+      <span class="msrc">Inner Engineering, ${esc(m.src)}</span>
     </div></details>`).join("") + `</div>`;
 }
 
