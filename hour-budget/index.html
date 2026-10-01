@@ -306,6 +306,9 @@ details.sitem summary .sval{white-space:nowrap}
 .brow.auto{cursor:pointer}
 .brow.auto.live{cursor:default}
 .bsess{font-size:14px;font-weight:600}
+.bpause{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.bpause input{flex:1;min-width:92px;font-family:var(--mono)}
+.bpause button{min-height:38px;padding:4px 12px}
 .bsess .bicon{color:var(--accent);margin-right:6px}
 .brow.pause .bx{color:var(--muted)}
 .brow.pause .bicon{color:var(--run);margin-right:6px;font-size:12px}
@@ -998,6 +1001,7 @@ function blockFormHTML(){
   return `<div class="bform">${e.sid ? `<div class="bsess"><span class="bicon" aria-hidden="true">⏱</span>${esc(e.label)} <span class="note">· learning session</span></div>` : ""}
     <div class="btimes"><input type="time" id="bFrom" value="${e.from}" aria-label="From"><span>to</span><input type="time" id="bTo" value="${e.to}" aria-label="To"></div>
     <input id="bText" value="${esc(e.text||"")}" maxlength="200" placeholder="${e.sid ? "Note (optional)" : "What did you do?"}" autocomplete="off" enterkeyhint="done">
+    ${e.sid ? `<div class="bpause"><span>Add a pause</span><input type="time" id="pFrom" aria-label="Pause from"><span>to</span><input type="time" id="pTo" aria-label="Pause to"><button type="button" class="ghost" data-baddpause="1">Add</button></div>` : ""}
     ${e.sid && e.hasPauses ? `<p class="note" style="margin:0">Pauses inside the new times are kept; the rest are dropped.</p>` : ""}
     <div class="row"><button type="button" class="primary" data-bsave="1" style="flex:0;min-width:100px">Save</button><button type="button" class="ghost" data-bcancel="1">Cancel</button>${e.id||e.sid ? (e.confirmDel ? `<button type="button" class="danger" data-bdel="1" style="margin-left:auto">${e.sid ? "Delete session" : "Delete"}</button>` : `<button type="button" class="ghost" data-bdelask="1" style="margin-left:auto">Delete…</button>`) : ""}</div>
   </div>`;
@@ -1036,11 +1040,30 @@ function openBlock(e){
   const t = $("bText"); if (t){ t.focus(); }
 }
 document.addEventListener("click", ev=>{
-  const b = ev.target.closest("[data-badd],[data-bgap],[data-bedit],[data-bsess],[data-bsave],[data-bcancel],[data-bdel],[data-bdelask]"); if (!b) return;
+  const b = ev.target.closest("[data-badd],[data-bgap],[data-bedit],[data-bsess],[data-bsave],[data-bcancel],[data-bdel],[data-bdelask],[data-baddpause]"); if (!b) return;
   if (b.dataset.bsess){
     const [k,sid,where] = b.dataset.bsess.split("|"), x = state.sessions.find(y=>y.id===sid); if (!x) return;
     const segs = sessSpans(k).filter(y=>y.sid===sid); if (!segs.length) return;
     return openBlock({k, where, sid, from:tfmt(segs[0].f), to:tfmt(segs[segs.length-1].t), text:x.note||"", label:x.goalName||"Goal", hasPauses:!!(x.pauses&&x.pauses.length)});
+  }
+  if (b.dataset.baddpause){
+    const e = blkEdit, x = e && state.sessions.find(y=>y.id===e.sid); if (!x) return;
+    const pf = $("pFrom").value, pt = $("pTo").value;
+    if (!pf || !pt) return toast("Set when the pause started and ended.");
+    if (tmin(pt) <= tmin(pf)) return toast("The pause has to end after it starts.");
+    const day0 = keyDate(e.k).getTime(), a = day0 + tmin(pf)*60000, c = day0 + tmin(pt)*60000;
+    // the end time: what you typed above if you changed it; older sessions without a recorded end keep their work time and get longer
+    let end = x.end || (x.at + x.ms);
+    if ($("bTo").value && $("bTo").value !== e.to) end = day0 + tmin($("bTo").value)*60000;
+    else if (!x.end) end = x.at + x.ms + (c - a) + (x.pauses||[]).reduce((n,[u,v])=>n + v - u, 0);
+    if (a < x.at || c > end) return toast("The pause has to be inside the session (" + hhmm(x.at) + "–" + hhmm(end) + ").");
+    const ps = (x.pauses||[]).filter(([u,v])=>v<=a || u>=c); ps.push([a,c]); ps.sort((m,n)=>m[0]-n[0]);
+    const ms = end - x.at - ps.reduce((n,[u,v])=>n + v - u, 0);
+    if (ms < 60000) return toast("That would leave less than a minute of work.");
+    const g = state.goals[x.goalId]; if (g) g.doneMs = Math.max(0, (g.doneMs||0) + ms - x.ms);
+    x.ms = ms; x.pauses = ps; if (!x.end) x.end = end; delete x.when;
+    persist(); toast("Pause added · session is now " + hm(ms));
+    blkEdit = null; return refreshDayLog(e.where);
   }
   if (b.dataset.bdelask){ blkEdit.confirmDel = true; const keep = $("bText") && $("bText").value; refreshDayLog(blkEdit.where); if (keep!=null && $("bText")) $("bText").value = keep; return; }
   if (b.dataset.badd){
