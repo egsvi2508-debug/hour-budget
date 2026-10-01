@@ -273,6 +273,24 @@ details.sitem summary .sval{white-space:nowrap}
 .card-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .card-more{align-self:flex-start;font-size:13px;min-height:28px;padding:0}
 .notes .entry{margin:0}
+/* formulas */
+.fxform{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.fxform textarea{min-height:76px;font-family:var(--mono);font-size:14px}
+.fxtools{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.fxtools::-webkit-scrollbar{display:none}
+.fxtools button{flex:none;min-height:34px;min-width:38px;padding:4px 10px;font-size:15px;border-radius:9px}
+.fxprev{min-height:52px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;overflow-x:auto;display:flex;align-items:center;justify-content:center}
+.fxprev.empty{color:var(--muted);font-size:13px}
+.fxsearch{width:100%}
+.fxtopic{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:14px 2px 6px;display:flex;justify-content:space-between}
+.fxlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.fxitem{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.fxitem .fxname{font-weight:600;font-size:14px}
+.fxitem .fxmath{overflow-x:auto;overflow-y:hidden;padding:2px 0}
+.fxitem .fxacts{display:flex;gap:14px}
+.fxitem .fxacts button{font-size:13px;min-height:26px;padding:0}
+.fxraw{font-family:var(--mono);font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.katex-display{margin:0}
 /* day log: time blocks */
 .blist{display:flex;flex-direction:column}
 .brow{display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:9px 0;min-height:40px;font-size:15px;color:var(--ink)}
@@ -280,6 +298,11 @@ details.sitem summary .sval{white-space:nowrap}
 .brow .bt{flex:none;width:92px;font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .brow .bx{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.35}
 .brow.gap .bx{color:var(--muted);opacity:.7}
+.brow.auto{cursor:default}
+.brow.auto .bx{color:var(--ink)}
+.brow.auto .bicon{color:var(--accent);margin-right:6px;font-size:13px}
+.brow.auto.live .bt{color:var(--run)}
+.brow.auto .chip{margin-left:4px;vertical-align:1px}
 .brow.gap .bx::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--run);margin-right:7px;vertical-align:middle;opacity:1}
 .brow .bt{white-space:nowrap}
 .brow:active{background:var(--accent-soft)}
@@ -381,6 +404,11 @@ details.sitem summary .sval{white-space:nowrap}
         </div>
       </div>
     </section>
+
+    <button type="button" class="rowlink" id="formulasBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5H7l6 7-6 7h11"/></svg>
+      <span class="rl-text">Formulas</span><span class="rl-sub" id="fxCount"></span><span class="chev" aria-hidden="true">›</span>
+    </button>
 
     <button type="button" class="rowlink" id="journalBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
@@ -506,12 +534,12 @@ document.addEventListener("toggle", e=>{
 }, true);
 
 /* ---------- storage ---------- */
-function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}, failures:[]}; }
+function blank(){ return {goals:{}, folders:{}, sessions:[], days:{}, settings:{}, failures:[], formulas:[]}; }
 function load(){
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || !s.goals) return blank();
-  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || [];
+  s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || []; s.formulas = s.formulas || [];
   // hour-by-hour entries become time blocks
   Object.values(s.days).forEach(d=>{
     if (!d.hours) return;
@@ -542,6 +570,7 @@ function parseHash(){
   if (location.hash === "#goals") return {view:"goals"};
   if (location.hash === "#stats") return {view:"stats"};
   if (location.hash === "#failures") return {view:"failures"};
+  if (location.hash === "#formulas") return {view:"formulas"};
   const m = location.hash.match(/^#f-([A-Za-z0-9]+)$/);
   return m ? {view:"folder", id:m[1]} : {view:"home"};
 }
@@ -646,12 +675,12 @@ function render(){
   const r = running();
   document.title = r ? runLabel(r) + " · " + r.name : "Hour Budget";
 
-  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures";
+  const home = route.view==="home", folder = route.view==="folder", journal = route.view==="journal", goalsView = route.view==="goals", statsView = route.view==="stats", failView = route.view==="failures", fxView = route.view==="formulas";
   $("homeView").hidden = !home; $("homeHeader").hidden = !home;
   if (!home){ $("menu").hidden = true; }
-  $("crumb").hidden = home; $("folderStats").hidden = !(journal || failView);
+  $("crumb").hidden = home; $("folderStats").hidden = !(journal || failView || fxView);
   $("folderEditBtn").hidden = !folder;
-  $("addRow").hidden = home || journal || statsView || failView || !$("form").hidden || !$("folderForm").hidden;
+  $("addRow").hidden = home || journal || statsView || failView || fxView || !$("form").hidden || !$("folderForm").hidden;
   $("addFolderBtn").hidden = !goalsView;
   $("backBtn").textContent = folder ? "‹ My goals" : "‹ Home";
 
@@ -659,6 +688,7 @@ function render(){
   if (journal) return renderJournal();
   if (statsView) return renderStats();
   if (failView) return renderFailures();
+  if (fxView) return renderFormulas();
 
   if (folder){
     const f = state.folders[route.id], gs = goalsIn(route.id);
@@ -717,6 +747,141 @@ $("t3Save").onclick = ()=>{
 };
 ["t3a","t3b","t3c"].forEach((id,i,arr)=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(i<2) $(arr[i+1]).focus(); else $("t3Save").click(); } }));
 
+/* ---------- formulas (typeset with KaTeX) ---------- */
+let fxEdit = null, fxDel = null, fxFilter = "", katexLoading = null;
+function loadKatex(){
+  if (window.katex) return Promise.resolve();
+  if (katexLoading) return katexLoading;
+  katexLoading = new Promise(res=>{
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"; document.head.appendChild(l);
+    const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js";
+    sc.onload = ()=>res(); sc.onerror = ()=>{ katexLoading = null; res(); }; document.head.appendChild(sc);
+  });
+  return katexLoading;
+}
+/* turn quick typing like  sum_(k=1)^n k = n(n+1)/2  or  lim_(x->0) sin(x)/x = 1  into LaTeX; real LaTeX passes through */
+const FX_WORDS = ["varepsilon","epsilon","alpha","beta","gamma","delta","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","pi","rho","sigma","tau","upsilon","varphi","phi","chi","psi","omega",
+  "Gamma","Delta","Theta","Lambda","Xi","Pi","Sigma","Phi","Psi","Omega","sum","prod","int","oint","lim","limsup","liminf","sup","inf","max","min","sin","cos","tan","cot","arcsin","arccos","arctan","sinh","cosh","tanh",
+  "log","ln","exp","det","dim","ker","partial","nabla","forall","exists","nexists","emptyset","cdot","times","cup","cap","subseteq","subset","supseteq","notin","mid","circ","to","mapsto","implies","iff","neg","land","lor","dots","ldots","cdots","pm","mp","approx","equiv","sim","perp","angle"];
+function fxGroup(str, i){ // str[i] === "(" -> [inner, endIndex]
+  let d = 0;
+  for (let j=i; j<str.length; j++){ if (str[j]==="(") d++; else if (str[j]===")"){ d--; if (!d) return [str.slice(i+1,j), j]; } }
+  return null;
+}
+function toTex(src){
+  let t = " " + src.trim() + " ";
+  t = t.replace(/<=>/g," \\iff ").replace(/=>/g," \\implies ").replace(/<=/g," \\le ").replace(/>=/g," \\ge ").replace(/!=/g," \\neq ").replace(/->/g," \\to ").replace(/\+-/g," \\pm ")
+       .replace(/\binfinity\b|\boo\b/g," \\infty ").replace(/\.\.\./g," \\dots ")
+       .replace(/\b(RR|NN|ZZ|QQ|CC)\b/g,(m,a)=>" \\mathbb{"+a[0]+"} ")
+       .replace(/(^|[^\\a-zA-Z])in(?![a-zA-Z])/g,"$1\\in ");
+  t = t.replace(new RegExp("(^|[^\\\\a-zA-Z])(" + FX_WORDS.join("|") + ")(?![a-zA-Z])","g"), "$1\\$2 ");
+  // _( ... ) and ^( ... ) and sqrt( ... ) and abs( ... )
+  for (let guard=0; guard<50; guard++){
+    const m = t.match(/(_|\^|\\?sqrt|abs)\(/); if (!m) break;
+    const i = m.index + m[0].length - 1, g = fxGroup(t, i); if (!g) break;
+    const head = m[1]==="abs" ? "\\left|" : m[1].replace(/^\\?sqrt$/,"\\sqrt");
+    const body = m[1]==="abs" ? g[0] + "\\right|" : "{" + g[0] + "}";
+    t = t.slice(0, m.index) + head + (m[1]==="abs" ? "" : "") + body + t.slice(g[1]+1);
+  }
+  // simple fractions: a/b, (a+b)/(c), x^2/2
+  t = t.replace(/(\\[a-zA-Z]+) \(/g, "$1(");
+  const opnd = "((?:\\\\?[A-Za-z0-9.]*\\([^()]*\\))+|[A-Za-z0-9.!']+(?:\\^\\{[^{}]*\\}|\\^[A-Za-z0-9])?)";
+  const re = new RegExp(opnd + "\\s*/\\s*" + opnd);
+  for (let guard=0; guard<30; guard++){
+    const m = t.match(re); if (!m) break;
+    const strip = x => /^\([^()]*\)$/.test(x) ? x.slice(1,-1) : x;
+    t = t.slice(0, m.index) + "\\frac{" + strip(m[1]) + "}{" + strip(m[2]) + "}" + t.slice(m.index + m[0].length);
+  }
+  t = t.replace(/\*/g," \\cdot ");
+  return t.trim();
+}
+function texHTML(tex){
+  if (!window.katex) return `<span class="fxraw">${esc(tex)}</span>`;
+  try { return katex.renderToString(tex, {throwOnError:false, displayMode:true, strict:"ignore"}); }
+  catch(e){ return `<span class="fxraw">${esc(tex)}</span>`; }
+}
+const FX_TOOLS = [["a/b","\\frac{}{}"],["√","\\sqrt{}"],["xⁿ","^{}"],["xₙ","_{}"],["Σ","\\sum_{k=1}^{n} "],["∫","\\int_{a}^{b} "],["lim","\\lim_{x \\to } "],["∞","\\infty "],["ε","\\varepsilon "],["δ","\\delta "],
+  ["≤","\\le "],["≥","\\ge "],["≠","\\neq "],["→","\\to "],["⇒","\\implies "],["∈","\\in "],["∀","\\forall "],["∃","\\exists "],["ℝ","\\mathbb{R}"],["ℕ","\\mathbb{N}"],["|x|","\\left| \\right|"]];
+function renderFormulas(){
+  $("folderTitle").textContent = "Formulas";
+  $("folderStats").textContent = "Type it your way or in LaTeX. It's typeset as you type.";
+  const ed = fxEdit ? state.formulas.find(f=>f.id===fxEdit) : null;
+  const topics = [...new Set(state.formulas.map(f=>f.topic).filter(Boolean))].sort();
+  let html = `<form class="fxform" id="fxForm" autocomplete="off">
+    <label class="field"><span>${ed ? "Edit formula" : "New formula"}</span><textarea id="fxSrc" maxlength="2000" placeholder="e.g.  sum_(k=1)^n k = n(n+1)/2    or    \\lim_{x\\to 0} \\frac{\\sin x}{x} = 1" spellcheck="false" autocapitalize="off">${ed ? esc(ed.src) : ""}</textarea></label>
+    <div class="fxtools" id="fxTools">${FX_TOOLS.map(([l,v],i)=>`<button type="button" data-fxins="${i}" aria-label="Insert ${esc(v.trim())}">${l}</button>`).join("")}</div>
+    <div class="fxprev empty" id="fxPrev">Preview</div>
+    <div class="two">
+      <label class="field"><span>Name (optional)</span><input id="fxTitle" maxlength="100" placeholder="e.g. Gauss sum" value="${ed && ed.title ? esc(ed.title) : ""}"></label>
+      <label class="field"><span>Topic</span><input id="fxTopic" maxlength="60" list="fxTopics" placeholder="e.g. Analysis 1" value="${ed && ed.topic ? esc(ed.topic) : (fxFilter && topics.includes(fxFilter) ? esc(fxFilter) : "")}"></label>
+    </div>
+    <datalist id="fxTopics">${topics.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+    <div class="row"><button type="submit" class="primary" style="flex:0;min-width:110px">${ed ? "Save" : "Add"}</button>${ed ? `<button type="button" class="ghost" data-fxcancel="1">Cancel</button>` : ""}</div>
+  </form>`;
+  const list = state.formulas.slice().sort((a,b)=>(a.topic||"~").localeCompare(b.topic||"~") || a.createdAt-b.createdAt);
+  if (!list.length){
+    html += `<div class="empty" style="margin-top:14px"><h2>No formulas yet</h2><p>Collect every formula you need in one place, sorted by topic.</p></div>`;
+  } else {
+    if (list.length > 6) html += `<input class="fxsearch" id="fxSearch" type="search" placeholder="Search formulas" value="${esc(fxFilter)}" style="margin-top:14px">`;
+    const q = fxFilter.toLowerCase();
+    const shown = list.filter(f=>!q || (f.title||"").toLowerCase().includes(q) || (f.topic||"").toLowerCase().includes(q) || f.src.toLowerCase().includes(q));
+    let topic = null, open = false;
+    shown.forEach(f=>{
+      const tp = f.topic || "Other";
+      if (tp!==topic){ if (open) html += `</ul>`; const n = shown.filter(x=>(x.topic||"Other")===tp).length; html += `<div class="fxtopic"><span>${esc(tp)}</span><span>${n}</span></div><ul class="fxlist">`; topic = tp; open = true; }
+      html += `<li class="fxitem">${f.title ? `<span class="fxname">${esc(f.title)}</span>` : ""}<div class="fxmath">${texHTML(toTex(f.src))}</div>
+        <span class="fxacts"><button type="button" class="linkbtn" data-fxedit="${f.id}">Edit</button>${fxDel===f.id
+          ? `<button type="button" class="linkbtn" style="color:var(--danger)" data-fxdelyes="${f.id}">Delete for good</button><button type="button" class="linkbtn" style="color:var(--muted)" data-fxno="1">Keep</button>`
+          : `<button type="button" class="linkbtn" style="color:var(--muted)" data-fxdel="${f.id}">Delete…</button>`}</span></li>`;
+    });
+    if (open) html += `</ul>`;
+    if (!shown.length) html += `<p class="note" style="margin-top:10px">Nothing matches “${esc(fxFilter)}”.</p>`;
+  }
+  $("list").innerHTML = html;
+  updateFxPreview();
+  if (!window.katex) loadKatex().then(()=>{ if (route.view==="formulas" && window.katex){ const keep = $("fxSrc") && $("fxSrc").value; const focused = document.activeElement && document.activeElement.id; renderFormulas(); if (keep!=null) $("fxSrc").value = keep; updateFxPreview(); if (focused && $(focused)) $(focused).focus(); } });
+}
+function updateFxPreview(){
+  const el = $("fxPrev"); if (!el) return;
+  const v = $("fxSrc").value.trim();
+  el.classList.toggle("empty", !v);
+  el.innerHTML = v ? texHTML(toTex(v)) : "Preview";
+}
+$("list").addEventListener("input", ev=>{
+  if (ev.target.id==="fxSrc") updateFxPreview();
+  if (ev.target.id==="fxSearch"){ fxFilter = ev.target.value; const pos = ev.target.selectionStart; renderFormulas(); const n = $("fxSearch"); if (n){ n.focus(); n.setSelectionRange(pos,pos); } }
+});
+$("list").addEventListener("submit", ev=>{
+  if (ev.target.id !== "fxForm") return;
+  ev.preventDefault();
+  const src = $("fxSrc").value.trim(); if (!src) return toast("Type a formula first.");
+  const title = $("fxTitle").value.trim(), topic = $("fxTopic").value.trim();
+  if (fxEdit){
+    const f = state.formulas.find(x=>x.id===fxEdit);
+    if (f){ f.src = src; if (title) f.title = title; else delete f.title; if (topic) f.topic = topic; else delete f.topic; }
+    fxEdit = null; toast("Formula updated");
+  } else {
+    const f = {id:newId("fx"), src, createdAt:Date.now()}; if (title) f.title = title; if (topic) f.topic = topic;
+    state.formulas.push(f); toast("Formula saved");
+  }
+  persist(); renderFormulas();
+});
+$("list").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-fxins],[data-fxedit],[data-fxcancel],[data-fxdel],[data-fxdelyes],[data-fxno]"); if (!b) return;
+  if (b.dataset.fxins != null){
+    const ta = $("fxSrc"), ins = FX_TOOLS[+b.dataset.fxins][1];
+    const a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0,a) + ins + ta.value.slice(z);
+    const brace = ins.indexOf("{}"), caret = a + (brace>=0 ? brace+1 : ins.length);
+    ta.focus(); ta.setSelectionRange(caret, caret); updateFxPreview(); return;
+  }
+  if (b.dataset.fxedit){ fxEdit = b.dataset.fxedit; fxDel = null; renderFormulas(); window.scrollTo(0,0); $("fxSrc").focus(); }
+  else if (b.dataset.fxcancel){ fxEdit = null; renderFormulas(); }
+  else if (b.dataset.fxdel){ fxDel = b.dataset.fxdel; renderFormulas(); }
+  else if (b.dataset.fxno){ fxDel = null; renderFormulas(); }
+  else if (b.dataset.fxdelyes){ state.formulas = state.formulas.filter(f=>f.id!==b.dataset.fxdelyes); fxDel = null; persist(); renderFormulas(); toast("Formula deleted"); }
+});
+
 /* ---------- day log: free time blocks ---------- */
 const DAY_START = 6*60, DAY_END = 24*60;
 let blkEdit = null; // {k, where, id|null, from, to, text}
@@ -724,18 +889,43 @@ const tmin = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
 const tfmt = m => pad(Math.floor(m/60)) + ":" + pad(m%60);
 function blocksOf(k){ return ((state.days[k] && state.days[k].blocks) || []).slice().sort((a,b)=>tmin(a.from)-tmin(b.from) || tmin(a.to)-tmin(b.to)); }
 function nowMin(){ const d = new Date(); return d.getHours()*60 + d.getMinutes(); }
+const minOf = ts => { const d = new Date(ts); return d.getHours()*60 + d.getMinutes(); };
+/* learning sessions on that day, as time spans */
+function sessSpans(k){
+  const out = [];
+  state.sessions.forEach(x=>{
+    if (!(x.ms>0) || dayKey(x.at)!==k || !(x.src==="timer" || x.when)) return;
+    const f = x.when ? tmin(x.when) : minOf(x.at);
+    const t = (!x.when && x.end && dayKey(x.end)===k) ? minOf(x.end) : f + Math.round(x.ms/60000);
+    out.push({f, t:Math.min(Math.max(t, f+1), DAY_END), name:x.goalName||"Goal", rating:x.rating, n:x.n});
+  });
+  const r = running();
+  if (r && k===dayKey(Date.now())){
+    const st = r.sessionStart || r.runningSince;
+    if (st) out.push({f: dayKey(st)===k ? minOf(st) : 0, t: Math.max(nowMin(), minOf(st)+1), name:r.name, live:true, paused:!!r.pausedAt});
+  }
+  return out;
+}
+function spansOf(k){
+  return blocksOf(k).map(b=>({f:tmin(b.from), t:tmin(b.to)})).concat(sessSpans(k)).sort((a,b)=>a.f-b.f || a.t-b.t);
+}
 function dayWindow(k){
-  const today = k===dayKey(Date.now());
-  const bl = blocksOf(k), first = bl.length ? Math.min(DAY_START, tmin(bl[0].from)) : DAY_START;
+  const today = k===dayKey(Date.now()), sp = spansOf(k);
+  const first = sp.length ? Math.min(DAY_START, sp[0].f) : DAY_START;
   return {from:first, to: today ? nowMin() : DAY_END, today};
 }
 function gapsOf(k){
   const w = dayWindow(k), out = []; let cur = w.from;
-  blocksOf(k).forEach(b=>{ const f = tmin(b.from), t = tmin(b.to); if (f - cur >= 15 && f <= w.to) out.push([cur, Math.min(f, w.to)]); cur = Math.max(cur, t); });
+  spansOf(k).forEach(b=>{ if (b.f - cur >= 15 && b.f <= w.to) out.push([cur, Math.min(b.f, w.to)]); cur = Math.max(cur, b.t); });
   if (w.to - cur >= 15) out.push([cur, w.to]);
   return out;
 }
-function notedMin(k){ return blocksOf(k).reduce((a,b)=>a + Math.max(0, tmin(b.to)-tmin(b.from)), 0); }
+function notedMin(k){ // covered time, overlaps counted once
+  let tot = 0, cs = -1, ce = -1;
+  spansOf(k).forEach(b=>{ if (b.f > ce){ if (ce > cs) tot += ce - cs; cs = b.f; ce = b.t; } else ce = Math.max(ce, b.t); });
+  if (ce > cs) tot += ce - cs;
+  return tot;
+}
 function saveBlocks(k, list){
   const d = state.days[k] || {};
   if (list.length) d.blocks = list; else delete d.blocks;
@@ -756,6 +946,7 @@ function dayLogHTML(k, where){
   const rows = [];
   bl.forEach(b=>rows.push({at:tmin(b.from), html: editingHere && blkEdit.id===b.id ? blockFormHTML()
     : `<button type="button" class="brow" data-bedit="${k}|${b.id}|${where}"><span class="bt">${b.from}–${b.to}</span><span class="bx">${esc(b.text)}</span></button>`}));
+  sessSpans(k).forEach(x=>rows.push({at:x.f, html:`<div class="brow auto${x.live?" live":""}"><span class="bt">${tfmt(x.f)}–${x.live ? (x.paused ? "paused" : "now") : tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏱</span>${esc(x.name)}${x.n===1?" · session ✓":""} ${chip(x.rating)}</span></div>`}));
   gaps.forEach(([f,t])=>rows.push({at:f, html:`<button type="button" class="brow gap" data-bgap="${k}|${tfmt(f)}|${tfmt(t)}|${where}"><span class="bt">${tfmt(f)}–${tfmt(t)}</span><span class="bx">+ what did you do?</span></button>`}));
   rows.sort((a,b)=>a.at-b.at);
   const adding = editingHere && !blkEdit.id;
@@ -832,6 +1023,7 @@ $("gratList").addEventListener("click", ev=>{
 function renderToday(){
   renderTop3();
   renderGrat(); renderHours();
+  $("fxCount").textContent = state.formulas.length ? state.formulas.length + (state.formulas.length===1 ? " formula" : " formulas") : "";
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
   const total = sumSince(t0);
@@ -1143,7 +1335,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && route.view!=="formulas" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1181,13 +1373,15 @@ function addSession(g, gid, ms, src, at){
 function stopGoal(id){
   const g = state.goals[id]; if (!g || !(g.runningSince || g.pausedAt)) return null;
   let ms = elapsed(g); const start = g.sessionStart || g.runningSince || (Date.now()-ms);
+  const elapsed0 = g.pausedAt ? (g.pausedAt - start) : (Date.now() - start); // wall-clock span incl. pauses
   const full = isSess(g) && ms >= sessLen(g) - 1000;
   if (isSess(g)) ms = Math.min(ms, sessLen(g));
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
   delete g.acc; delete g.pausedAt; delete g.sessionStart;
-  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; return s; }
+  const end = Math.min(Date.now(), start + elapsed0);
+  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; return s; }
   if (ms < 60000) return 0;
-  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0;
+  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end;
   return s;
 }
 function stopFeedback(g, s){
@@ -1502,6 +1696,7 @@ $("folderDeleteYes").onclick=()=>{
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; blkEdit = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
+$("formulasBtn").onclick=()=>{ fxEdit = null; fxDel = null; go("formulas"); };
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
 function pauseGoal(g){ if (!g.runningSince) return; g.acc = elapsed(g); g.runningSince = null; g.pausedAt = Date.now(); }
