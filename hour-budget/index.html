@@ -1839,7 +1839,12 @@ let deferred = null;
 window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); deferred=e; $("installBar").hidden=false; });
 $("installBtn").onclick=async()=>{ if(!deferred) return; deferred.prompt(); await deferred.userChoice.catch(()=>{}); deferred=null; $("installBar").hidden=true; };
 window.addEventListener("appinstalled",()=>{ $("installBar").hidden=true; });
-if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+if ("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js", {updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}));
+  // a new version took over: reload once so it shows right away
+  let reloaded = false, hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", ()=>{ if (!hadController || reloaded || !$("rateScrim").hidden || blkEdit || !$("form").hidden) return; reloaded = true; location.reload(); });
+}
 
 if (route.view==="folder" && !state.folders[route.id]) route = {view:"home"};
 persist(); render(); wake(); checkSessionEnd(); if (!maybeReminder()) nextRating();

@@ -1,4 +1,4 @@
-const CACHE = "hour-budget-v32";
+const CACHE = "hour-budget-v33";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -26,7 +26,7 @@ self.addEventListener("fetch", e => {
   }
   if (url.origin !== location.origin) return;
   e.respondWith(
-    fetch(req).then(res => {
+    fetch(req, {cache: "no-store"}).then(res => {
       const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res;
     }).catch(() => caches.match(req).then(hit => hit || caches.match("index.html")))
   );
