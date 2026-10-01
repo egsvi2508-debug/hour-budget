@@ -307,6 +307,10 @@ details.sitem summary .sval{white-space:nowrap}
 .brow.auto{cursor:pointer}
 .brow.auto.live{cursor:default}
 .bsess{font-size:14px;font-weight:600}
+.bk{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.bkbox{display:flex;flex-direction:column;gap:8px;background:var(--accent-soft);border-radius:12px;padding:12px}
+.bknudge{border-color:var(--run)}
+.bknudge svg{stroke:var(--run)}
 .bpause{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .bpause input{flex:1;min-width:92px;font-family:var(--mono)}
 .bpause button{min-height:38px;padding:4px 12px}
@@ -357,6 +361,13 @@ details.sitem summary .sval{white-space:nowrap}
     <div class="row"><button type="button" id="nameSave">Save name</button></div>
     <button type="button" class="linkbtn" id="remindBtn" style="align-self:flex-start;color:var(--muted);font-weight:400;font-size:14px">Show my reminders ›</button>
     <button type="button" class="linkbtn" id="failuresBtn" style="align-self:flex-start;color:var(--muted);font-weight:400;font-size:14px">CV of failures ›</button>
+    <div class="bk">
+      <div class="card-head"><span class="eyebrow">Backup</span><span class="card-meta" id="bkLast"></span></div>
+      <p class="note" style="margin:0">Everything is stored only on this phone. Save a backup file to Google Drive or email it to yourself, so a lost phone doesn't mean lost data.</p>
+      <div class="row"><button type="button" class="primary" id="bkSave" style="flex:0;min-width:150px">Back up now</button><button type="button" class="ghost" id="bkRestoreBtn">Restore from a file</button></div>
+      <input type="file" id="bkFile" accept="application/json,.json" hidden>
+      <div id="bkConfirm" hidden></div>
+    </div>
   </section>
 
   <!-- opening page -->
@@ -420,6 +431,11 @@ details.sitem summary .sval{white-space:nowrap}
         </div>
       </div>
     </section>
+
+    <button type="button" class="rowlink bknudge" id="bkNudge" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
+      <span class="rl-text">Back up your data</span><span class="rl-sub" id="bkNudgeSub"></span><span class="chev" aria-hidden="true">›</span>
+    </button>
 
     <button type="button" class="rowlink" id="formulasBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5H7l6 7-6 7h11"/></svg>
@@ -1139,7 +1155,7 @@ $("gratList").addEventListener("click", ev=>{
 
 function renderToday(){
   renderTop3();
-  renderGrat(); renderHours();
+  renderGrat(); renderHours(); renderBackup();
   $("fxCount").textContent = state.formulas.length ? state.formulas.length + (state.formulas.length===1 ? " formula" : " formulas") : "";
   const t0 = startOfToday();
   const today = state.sessions.filter(s=>s.at>=t0 && s.ms>0);
@@ -1816,6 +1832,65 @@ $("folderDeleteYes").onclick=()=>{
 $("backBtn").onclick=()=>{ go(route.view==="folder" ? "goals" : null); };
 $("journalBtn").onclick=()=>{ editingDay = null; blkEdit = null; go("journal"); };
 $("goalsBtn").onclick=()=>go("goals");
+/* ---------- backup ---------- */
+function daysSince(ts){ return Math.floor((Date.now() - ts) / DAY); }
+function backupLabel(){
+  const t = state.settings.lastBackup;
+  if (!t) return "never backed up";
+  const d = daysSince(t);
+  return "last backup " + (d===0 ? "today" : d===1 ? "yesterday" : d + " days ago");
+}
+function hasData(){ return Object.keys(state.goals).length || state.sessions.length || Object.keys(state.days).length || state.formulas.length; }
+function renderBackup(){
+  $("bkLast").textContent = backupLabel();
+  const t = state.settings.lastBackup, due = hasData() && (!t || daysSince(t) >= 7);
+  $("bkNudge").hidden = !due;
+  $("bkNudgeSub").textContent = backupLabel();
+}
+async function backupNow(){
+  const stamp = dayKey(Date.now());
+  const payload = JSON.stringify({app:"hour-budget", version:1, exportedAt:new Date().toISOString(), data:state});
+  const name = "hour-budget-backup-" + stamp + ".json";
+  const file = new File([payload], name, {type:"application/json"});
+  let done = false;
+  try{
+    if (navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:"Hour Budget backup " + stamp});
+      done = true;
+    }
+  }catch(e){ if (e && e.name==="AbortError") return toast("Backup not saved."); }
+  if (!done){
+    const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  state.settings.lastBackup = Date.now(); persist(); renderBackup();
+  toast(done ? "Backup shared. Keep it in Drive or your email." : "Backup file downloaded.");
+}
+let pendingRestore = null;
+$("bkSave").onclick = backupNow;
+$("bkNudge").onclick = ()=>{ $("menu").hidden = false; $("menuBtn").setAttribute("aria-expanded", true); $("nameInput").value = state.settings.name||""; renderBackup(); $("menu").scrollIntoView({behavior:"smooth", block:"start"}); };
+$("bkRestoreBtn").onclick = ()=>$("bkFile").click();
+$("bkFile").onchange = async ()=>{
+  const f = $("bkFile").files[0]; $("bkFile").value = ""; if (!f) return;
+  let obj; try { obj = JSON.parse(await f.text()); } catch(e){ return toast("That file isn't a backup."); }
+  const d = obj && obj.app==="hour-budget" ? obj.data : obj;
+  if (!d || typeof d.goals!=="object" || !Array.isArray(d.sessions)) return toast("That file isn't an Hour Budget backup.");
+  pendingRestore = d;
+  const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}) : "an unknown date";
+  $("bkConfirm").innerHTML = `<div class="bkbox"><b>Restore the backup from ${esc(when)}?</b>
+    <span class="note" style="margin:0">${Object.keys(d.goals).length} goals · ${d.sessions.length} sessions · ${Object.keys(d.days||{}).length} journal days · ${(d.formulas||[]).length} formulas. It replaces what's on this phone now.</span>
+    <div class="row"><button type="button" class="danger" id="bkYes">Replace with backup</button><button type="button" class="ghost" id="bkNo">Cancel</button></div></div>`;
+  $("bkConfirm").hidden = false;
+  $("bkNo").onclick = ()=>{ pendingRestore = null; $("bkConfirm").hidden = true; };
+  $("bkYes").onclick = ()=>{
+    try { localStorage.setItem(KEY + ".beforeRestore", JSON.stringify(state)); } catch(e){}
+    localStorage.setItem(KEY, JSON.stringify(pendingRestore));
+    state = load(); pendingRestore = null; $("bkConfirm").hidden = true; $("menu").hidden = true;
+    state.settings.lastBackup = state.settings.lastBackup || Date.now(); persist();
+    toast("Backup restored"); go(null); render();
+  };
+};
+
 $("formulasBtn").onclick=()=>{ fxEdit = null; fxDel = null; go("formulas"); };
 $("failuresBtn").onclick=()=>{ $("menu").hidden = true; editingFail = null; confirmFail = null; go("failures"); };
 $("statsBtn").onclick=()=>go("stats");
@@ -1848,7 +1923,7 @@ $("runStop").onclick=()=>{
 };
 
 /* ---------- settings menu ---------- */
-$("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; };
+$("menuBtn").onclick=()=>{ const m=$("menu"); m.hidden=!m.hidden; $("menuBtn").setAttribute("aria-expanded",!m.hidden); $("nameInput").value = state.settings.name||""; renderBackup(); $("bkConfirm").hidden = true; };
 
 /* ---------- install ---------- */
 let deferred = null;
