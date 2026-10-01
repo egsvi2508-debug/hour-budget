@@ -1,4 +1,4 @@
-const CACHE = "hour-budget-v33";
+const CACHE = "hour-budget-v34";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {

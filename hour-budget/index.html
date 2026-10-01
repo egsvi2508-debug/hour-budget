@@ -124,6 +124,7 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .dp-run{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px 8px 8px 12px;margin-top:6px;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
 .dp-stop{background:var(--run);border-color:var(--run);color:#fff;min-height:36px;padding:6px 14px;font-weight:600}
 .dp-btns{display:flex;gap:6px;flex:none}
+.dp-paused{opacity:.8;background:rgba(0,0,0,.1)}
 .dp-pause{background:rgba(255,255,255,.16);border-color:transparent;color:inherit;min-height:36px;padding:6px 12px;font-weight:600}
 .goal.paused{border-color:var(--run);border-style:dashed}
 .live.paused{color:var(--muted)}
@@ -372,6 +373,7 @@ details.sitem summary .sval{white-space:nowrap}
         <span id="runText"></span>
         <span class="dp-btns"><button type="button" class="dp-pause" id="runPause">Pause</button><button type="button" class="dp-stop" id="runStop">Stop</button></span>
       </div>
+      <div id="pausedRows"></div>
     </div>
 
     <section class="card top3" id="top3" aria-label="Three most important things today">
@@ -634,7 +636,9 @@ function folders(){ return Object.entries(state.folders).map(([id,f])=>({id,...f
 /* timer: runningSince = start of the current stretch (null while paused), acc = time from earlier stretches, pausedAt = paused */
 function elapsed(g){ return (g.acc||0) + (g.runningSince ? Date.now()-g.runningSince : 0); }
 function doneNow(g){ return (g.doneMs||0) + elapsed(g); }
-function running(){ return allGoals().find(g=>g.runningSince || g.pausedAt); }
+/* one goal can run at a time; any number can sit paused */
+function activeGoals(){ return allGoals().filter(g=>g.runningSince || g.pausedAt); }
+function running(){ return allGoals().find(g=>g.runningSince) || allGoals().find(g=>g.pausedAt); }
 function isSess(g){ return !!g && g.unit==="sessions"; }
 function sessLen(g){ return Math.max(1, g.sessMin||1) * 60000; }
 function nTxt(n){ return n + (n===1 ? " session" : " sessions"); }
@@ -666,11 +670,11 @@ function chime(){
 function sumSince(from, goalIds){
   let t = 0;
   state.sessions.forEach(s=>{ if (s.at>=from && (!goalIds || goalIds.has(s.goalId))) t += s.ms; });
-  const r = running();
-  if (r && (!goalIds || goalIds.has(r.id))){
+  activeGoals().forEach(r=>{
+    if (goalIds && !goalIds.has(r.id)) return;
     if ((r.sessionStart||r.runningSince||0) >= from) t += r.acc||0;
     if (r.runningSince) t += Date.now() - Math.max(from, r.runningSince);
-  }
+  });
   return Math.max(0,t);
 }
 function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); }
@@ -948,24 +952,24 @@ function sessParts(k){
     parts.forEach(([a,b],i)=>addSeg(a, b, {...base, cont:i>0, rating: i===parts.length-1 ? x.rating : undefined}));
     ps.forEach(([a,b])=>{ if (dayKey(a)===k) pauses.push({f:minOf(a), t:Math.max(minOf(b), minOf(a)+1)}); });
   });
-  const r = running();
-  if (r && k===dayKey(Date.now())){
+  if (k===dayKey(Date.now())) activeGoals().forEach(r=>{
     const st = r.sessionStart || r.runningSince, now = Date.now();
     if (st){
       const until = r.pausedAt || now, parts = splitByPauses(st, until, r.pauses);
       parts.forEach(([a,b],i)=>addSeg(a, b, {name:r.name, cont:i>0, live: !r.pausedAt && i===parts.length-1}));
       (r.pauses||[]).forEach(([a,b])=>{ if (dayKey(a)===k) pauses.push({f:minOf(a), t:Math.max(minOf(b), minOf(a)+1)}); });
-      if (r.pausedAt && dayKey(r.pausedAt)===k) pauses.push({f:minOf(r.pausedAt), t:Math.max(nowMin(), minOf(r.pausedAt)+1), live:true});
+      if (r.pausedAt && dayKey(r.pausedAt)===k) pauses.push({f:minOf(r.pausedAt), t:Math.max(nowMin(), minOf(r.pausedAt)+1), live:true, name:r.name});
     }
-  }
+  });
   return {segs, pauses};
 }
 function sessSpans(k){ return sessParts(k).segs; }
 function openPauses(k){ // pauses not yet explained by a block
-  const bl = blocksOf(k).map(b=>[tmin(b.from), tmin(b.to)]);
-  return sessParts(k).pauses.filter(p=>{
+  const parts = sessParts(k);
+  const bl = blocksOf(k).map(b=>[tmin(b.from), tmin(b.to)]).concat(parts.segs.map(x=>[x.f, x.t])); // your blocks and other sessions explain a pause
+  return parts.pauses.filter(p=>{
     const cov = bl.reduce((a,[f,t])=>a + Math.max(0, Math.min(t,p.t) - Math.max(f,p.f)), 0);
-    return p.live || cov < (p.t - p.f) / 2;
+    return cov < (p.t - p.f) / 2;
   });
 }
 function spansOf(k, withPauses){
@@ -1017,7 +1021,7 @@ function dayLogHTML(k, where){
     rows.push({at:x.f, html: x.live || !x.sid ? `<div class="brow auto live">${inner}</div>` : `<button type="button" class="brow auto" data-bsess="${k}|${x.sid}|${where}">${inner}</button>`});
   });
   openPauses(k).forEach(x=>rows.push({at:x.f + 0.5, html: x.live
-    ? `<div class="brow pause live"><span class="bt">${tfmt(x.f)}–now</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Paused</span></div>`
+    ? `<div class="brow pause live"><span class="bt">${tfmt(x.f)}–now</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>${esc(x.name||"")} paused</span></div>`
     : `<button type="button" class="brow pause" data-bgap="${k}|${tfmt(x.f)}|${tfmt(x.t)}|${where}"><span class="bt">${tfmt(x.f)}–${tfmt(x.t)}</span><span class="bx"><span class="bicon" aria-hidden="true">⏸</span>Pause · ${hm((x.t-x.f)*60000).replace(/^0h /,"")} · what did you do?</span></button>`}));
   gaps.forEach(([f,t])=>rows.push({at:f, html:`<button type="button" class="brow gap" data-bgap="${k}|${tfmt(f)}|${tfmt(t)}|${where}"><span class="bt">${tfmt(f)}–${tfmt(t)}</span><span class="bx">+ what did you do?</span></button>`}));
   rows.sort((a,b)=>a.at-b.at);
@@ -1144,6 +1148,8 @@ function renderToday(){
   const r = running();
   $("runRow").hidden = !r;
   if (r){ $("runText").textContent = r.name + " · " + runLabel(r); $("runStop").dataset.id = r.id; $("runPause").textContent = r.pausedAt ? "Resume" : "Pause"; }
+  const others = activeGoals().filter(g=>!r || g.id!==r.id);
+  $("pausedRows").innerHTML = others.map(g=>`<div class="dp-run dp-paused"><span>${esc(g.name)} · ${runLabel(g)}</span><span class="dp-btns"><button type="button" class="dp-pause" data-presume="${g.id}">Resume</button><button type="button" class="dp-stop" data-pstop="${g.id}">Stop</button></span></div>`).join("");
   $("nameAsk").hidden = !!(state.settings.name||"").trim();
   if ($("entryEdit").hidden){
     const e = state.days[dayKey(Date.now())];
@@ -1209,7 +1215,7 @@ function renderStats(){
   const r = running();
   const block = (from) => {
     const ss = work.filter(s=>s.at>=from);
-    return {ms: sumSince(from), n: ss.length + (r && (r.sessionStart||r.runningSince||0)>=from ? 1 : 0), avg: weightedAvg(ss)};
+    return {ms: sumSince(from), n: ss.length + activeGoals().filter(a=>(a.sessionStart||a.runningSince||0)>=from).length, avg: weightedAvg(ss)};
   };
   const today = block(t0), w7 = block(now-7*DAY), w30 = block(now-30*DAY), all = block(0);
   const dayset = new Set(work.map(s=>dayKey(s.at)));
@@ -1486,6 +1492,7 @@ function addSession(g, gid, ms, src, at){
 function stopGoal(id){
   const g = state.goals[id]; if (!g || !(g.runningSince || g.pausedAt)) return null;
   let ms = elapsed(g); const start = g.sessionStart || g.runningSince || (Date.now()-ms);
+  if (g.pausedAt && Date.now() - g.pausedAt < 120000){ g.runningSince = g.pausedAt; delete g.pausedAt; ms = elapsed(g); } // stopped right after a tiny pause
   const elapsed0 = g.pausedAt ? (g.pausedAt - start) : (Date.now() - start); // wall-clock span incl. pauses
   const full = isSess(g) && ms >= sessLen(g) - 1000;
   if (isSess(g)) ms = Math.min(ms, sessLen(g));
@@ -1513,8 +1520,7 @@ function finishSession(id){
   persist(); render(); wake(); stopFeedback(g, s); nextRating();
 }
 function checkSessionEnd(){
-  const r = running();
-  if (r && isSess(r) && r.runningSince && elapsed(r) >= sessLen(r)) finishSession(r.id);
+  activeGoals().forEach(r=>{ if (isSess(r) && r.runningSince && elapsed(r) >= sessLen(r)) finishSession(r.id); });
 }
 function maybeReminder(){
   const k = dayKey(Date.now());
@@ -1614,13 +1620,13 @@ $("list").addEventListener("click", ev=>{
   if (act==="delete-no"){ confirmDelete=null; return render(); }
   if (act==="edit") return openForm(id);
   if (act==="start"){
-    Object.keys(state.goals).forEach(k=>{ if(k!==id) stopGoal(k); });
+    Object.keys(state.goals).forEach(k=>{ if (k!==id && state.goals[k].runningSince){ pauseGoal(state.goals[k]); toast(state.goals[k].name + " paused. Resume it any time."); } });
     g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt; g.pauses = [];
     if (isSess(g)) audioUnlock();
   } else if (act==="pause"){
     pauseGoal(g);
   } else if (act==="resume"){
-    resumeGoal(g); if (isSess(g)) audioUnlock();
+    pauseOthers(id); resumeGoal(g); if (isSess(g)) audioUnlock();
   } else if (act==="stop"){
     stopFeedback(g, stopGoal(id));
   } else if (act==="addn"){
@@ -1817,12 +1823,22 @@ function pauseGoal(g){ if (!g.runningSince) return; g.acc = elapsed(g); g.runnin
 function resumeGoal(g){
   if (!g.pausedAt) return;
   const now = Date.now();
-  if (now - g.pausedAt >= 60000){ g.pauses = g.pauses || []; g.pauses.push([g.pausedAt, now]); toast("Pause of " + hm(now - g.pausedAt) + " noted in Your day"); }
+  if (now - g.pausedAt < 120000){ g.runningSince = g.pausedAt; delete g.pausedAt; return; } // under 2 min: as if you never paused
+  g.pauses = g.pauses || []; g.pauses.push([g.pausedAt, now]);
+  toast("Pause of " + hm(now - g.pausedAt) + " noted in Your day");
   g.runningSince = now; delete g.pausedAt;
 }
+function pauseOthers(id){ Object.values(state.goals).forEach(o=>{ if (o.runningSince && o!==state.goals[id]) pauseGoal(o); }); }
+$("pausedRows").addEventListener("click", ev=>{
+  const rb = ev.target.closest("[data-presume]"), sb = ev.target.closest("[data-pstop]");
+  if (rb){ const g = state.goals[rb.dataset.presume]; if (!g) return; pauseOthers(g.id); resumeGoal(g); if (isSess(g)) audioUnlock(); }
+  else if (sb){ const g = state.goals[sb.dataset.pstop]; if (!g) return; stopFeedback(g, stopGoal(sb.dataset.pstop)); }
+  else return;
+  persist(); render(); wake(); nextRating();
+});
 $("runPause").onclick=()=>{
   const g = state.goals[$("runStop").dataset.id]; if (!g) return;
-  if (g.pausedAt){ resumeGoal(g); if (isSess(g)) audioUnlock(); } else pauseGoal(g);
+  if (g.pausedAt){ pauseOthers(g.id); resumeGoal(g); if (isSess(g)) audioUnlock(); } else pauseGoal(g);
   persist(); render(); wake();
 };
 $("runStop").onclick=()=>{
