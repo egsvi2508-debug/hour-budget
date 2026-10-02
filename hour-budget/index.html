@@ -243,6 +243,18 @@ textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .score span{font-size:14px;color:var(--muted)}
 input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:0;border:0;background:none}
 .scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-8px}
+.chq{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.chq:first-child{border-top:0;padding-top:0}
+.chq .ql{font-size:14px;font-weight:600;line-height:1.35}
+.chq .qs{font-size:12px;color:var(--muted);margin-top:-3px}
+.chq .qgoal{font-size:14px;padding:2px 0 2px 10px;border-left:2px solid var(--line);overflow-wrap:anywhere}
+.chq .opts{display:flex;gap:6px}
+.chq .opts button{flex:1;min-height:40px;padding:4px 2px;font-size:14px;border-radius:10px}
+.chq .opts button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.chq .likert button{font-family:var(--mono);min-width:0}
+.chq .ends{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.chkhead{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 -4px}
+.sbreak{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 /* journal */
 .days{display:flex;flex-direction:column;gap:8px}
 details.day{background:var(--surface);border:1px solid var(--line);border-radius:12px}
@@ -572,16 +584,27 @@ details.sitem summary .sval{white-space:nowrap}
 <!-- rating sheet -->
 <div class="scrim" id="rateScrim" hidden>
   <section class="rate" role="dialog" aria-modal="true" aria-labelledby="rateTitle">
-    <h2 id="rateTitle">How was this session?</h2>
+    <h2 id="rateTitle">Session check</h2>
     <p class="what" id="rateWhat"></p>
-    <div class="score"><b id="rateNum">50</b><span id="rateWord">okay</span></div>
-    <input type="range" id="rateRange" min="0" max="100" step="1" value="50" aria-label="Productivity and satisfaction from 0 to 100">
-    <div class="scale"><span>0 · wasted</span><span>100 · excellent</span></div>
-    <p class="note" style="margin-top:-6px">The rating is final once you save it.</p>
+    <div id="chk"></div>
+    <div class="score" id="chkScore" hidden><b id="rateNum">–</b><span id="rateWord"></span></div>
+    <p class="note" style="margin-top:-6px">Answer every question. The score is final once you save it.</p>
     <label class="field"><span>When did you do it? (optional)</span><input type="time" id="rateWhen" style="max-width:160px"></label>
     <label class="field"><span>How did it feel? What could be better? (optional)</span>
       <textarea id="rateNote" maxlength="600" placeholder="Focused after the first 20 min. Phone was a distraction."></textarea></label>
-    <button type="button" class="primary" id="rateSave">Save rating</button>
+    <button type="button" class="primary" id="rateSave" disabled>Save</button>
+  </section>
+</div>
+
+<!-- session goal: asked when a timer starts -->
+<div class="scrim" id="sgScrim" hidden>
+  <section class="rate" role="dialog" aria-modal="true" aria-labelledby="sgTitle">
+    <h2 id="sgTitle">What exactly will you get done?</h2>
+    <p class="what" id="sgWhat"></p>
+    <input id="sgText" maxlength="160" placeholder="e.g. Exercises 1.2 #3–6, or bars 1–24 hands together at 80" autocomplete="off" enterkeyhint="go">
+    <p class="note" style="margin:0">A concrete goal makes the check afterwards a fact, not a feeling.</p>
+    <button type="button" class="primary" id="sgStart">Start</button>
+    <button type="button" class="linkbtn" id="sgSkip" style="align-self:center;color:var(--muted);font-weight:400">Start without a goal</button>
   </section>
 </div>
 
@@ -1385,6 +1408,8 @@ function sessHTML(s){
     return `<li><details class="sitem" data-sess="${s.id}"${openSess.has(s.id)?" open":""}>
       <summary><span class="sname">${label}</span><span class="sval">${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></summary>
       <div class="sbody">
+        ${s.goalText?`<div class="swhen">Goal: ${esc(s.goalText)}</div>`:""}
+        ${s.check?`<div class="sbreak">${chkBreak(s.check)}</div>`:""}
         ${s.when?`<div class="swhen">Around ${whenLabel(s.when)}</div>`:""}
         ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
         ${!s.when && !s.note ? `<div class="swhen">No time or note added.</div>` : ""}
@@ -1503,6 +1528,7 @@ function cardHTML(g){
     <div class="big">${big}<small>${sub}</small></div>
     ${pct!==null?`<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${pct.toFixed(1)}%"></i></div>`:""}
     <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun||isPaused?`<span class="live${isPaused?" paused":""}" data-live="${g.id}">${runLabel(g)}</span>`:""}</div>
+    ${(isRun||isPaused) && g.sessGoal ? `<div class="note" style="margin:-4px 0 0">Goal: ${esc(g.sessGoal)}</div>` : ""}
     ${msHTML(g)}
     <div class="actions">
       ${isRun||isPaused?`<button type="button" class="primary stop" data-act="stop" style="min-width:0">Stop</button><button type="button" data-act="${isPaused?"resume":"pause"}">${isPaused?"Resume":"Pause"}</button>`:`<button type="button" class="primary" data-act="start">${sess ? "Start session · " + g.sessMin + " min" : "Start timer"}</button>`}
@@ -1529,7 +1555,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && route.view!=="failures" && route.view!=="formulas" && route.view!=="predictions" && route.view!=="meditation" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && $("sgScrim").hidden && route.view!=="failures" && route.view!=="formulas" && route.view!=="predictions" && route.view!=="meditation" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1572,14 +1598,34 @@ function stopGoal(id){
   const full = isSess(g) && ms >= sessLen(g) - 1000;
   if (isSess(g)) ms = Math.min(ms, sessLen(g));
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
-  const pauses = (g.pauses || []).slice();
-  delete g.acc; delete g.pausedAt; delete g.sessionStart; delete g.pauses;
+  const pauses = (g.pauses || []).slice(), goalText = g.sessGoal || "";
+  delete g.acc; delete g.pausedAt; delete g.sessionStart; delete g.pauses; delete g.sessGoal;
   const end = Math.min(Date.now(), start + elapsed0);
   if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; if (pauses.length) s.pauses = pauses; return s; }
   if (ms < 60000) return 0;
-  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end; if (pauses.length) s.pauses = pauses;
+  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end; if (pauses.length) s.pauses = pauses; if (goalText) s.goalText = goalText;
   return s;
 }
+function startGoal(id, goalText){
+  const g = state.goals[id]; if (!g) return;
+  Object.keys(state.goals).forEach(k=>{ if (k!==id && state.goals[k].runningSince){ pauseGoal(state.goals[k]); toast(state.goals[k].name + " paused. Resume it any time."); } });
+  g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt; g.pauses = [];
+  if (goalText) g.sessGoal = goalText; else delete g.sessGoal;
+  if (isSess(g)) audioUnlock();
+}
+let sgFor = null;
+function askSessionGoal(id){
+  sgFor = id; $("sgWhat").textContent = state.goals[id].name; $("sgText").value = "";
+  $("sgScrim").hidden = false; document.body.style.overflow = "hidden"; $("sgText").focus();
+}
+function closeSg(goal){
+  const id = sgFor; sgFor = null; $("sgScrim").hidden = true; document.body.style.overflow = "";
+  if (!id || !state.goals[id]) return;
+  startGoal(id, goal); persist(); render(); wake();
+}
+$("sgStart").onclick = ()=>closeSg($("sgText").value.replace(/\s+/g," ").trim());
+$("sgSkip").onclick = ()=>closeSg("");
+$("sgText").addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); $("sgStart").click(); } });
 function stopFeedback(g, s){
   if (isSess(g)){
     if (s && s.n) sessionDone(g);
@@ -1622,19 +1668,70 @@ function nextRating(){
   const p = state.sessions.find(s=>s.rating===null);
   if (p) openRating(p.id);
 }
+/* ---------- session check ----------
+   Instead of one gut-feeling number, the score is built from:
+   - Focus: 4 items of the Flow Short Scale (Rheinberg, Vollmeyer & Engeser 2003), answered 1–7, order shuffled each time
+   - Goal: did you do the concrete thing you set when you pressed Start? (done / partly / no)
+   - Recall: close the material and write or say the key points from memory (retrieval check; Roediger & Karpicke 2006)
+   - Distractions: how often you drifted off or checked the phone
+   score = weighted mean (focus 35, goal 25, recall 25, distractions 15); weights of missing parts are spread over the rest. */
+const FLOW_ITEMS = ["I had no difficulty concentrating", "I knew what I had to do each step of the way", "I was totally absorbed in what I was doing", "I felt just the right amount of challenge"];
+let chk = null;
+function chkParts(s, g){ const learning = !(g && isSess(g)); return {goal: learning && !!s.goalText, recall: learning}; }
+function chkScore(c, parts){
+  const flow = c.flow.every(v=>v) ? (c.flow.reduce((a,b)=>a+b,0)/c.flow.length - 1) / 6 : null;
+  const comp = [[flow, 35], [c.distr==null ? null : [1, 2/3, 1/3, 0][c.distr], 15]];
+  if (parts.goal) comp.push([c.goal==null ? null : {done:1, partly:.5, no:0}[c.goal], 25]);
+  if (parts.recall) comp.push([c.recall==null ? null : c.recall/3, 25]);
+  if (comp.some(([v])=>v==null)) return null;
+  const w = comp.reduce((a,[,x])=>a+x,0);
+  return Math.round(comp.reduce((a,[v,x])=>a+v*x,0) / w * 100);
+}
+function chkBreak(c){
+  if (!c) return "";
+  const f = c.flow && c.flow.every(v=>v) ? (c.flow.reduce((a,b)=>a+b,0)/c.flow.length).toFixed(1) : null;
+  return [f ? "Focus " + f + "/7" : "", c.goal ? "Goal " + c.goal : "", c.recall!=null ? "Recall " + (c.recall===3 ? "3+" : c.recall) : "", c.distr!=null ? "Distractions " + ["0","1–2","3–5","6+"][c.distr] : ""].filter(Boolean).join(" · ");
+}
+function opts(key, labels, cur, extra){ return `<div class="opts ${extra||""}">${labels.map(([v,l])=>`<button type="button" data-ck="${key}" data-cv="${v}" aria-pressed="${String(cur)===String(v)}">${l}</button>`).join("")}</div>`; }
+function renderChk(){
+  const s = state.sessions.find(x=>x.id===ratingId); if (!s) return;
+  const parts = chkParts(s, state.goals[s.goalId]);
+  let h = "";
+  if (parts.goal) h += `<div class="chq"><span class="ql">Did you get your goal done?</span><span class="qgoal">${esc(s.goalText)}</span>${opts("goal", [["done","Done"],["partly","Partly"],["no","No"]], chk.goal)}</div>`;
+  if (parts.recall) h += `<div class="chq"><span class="ql">Recall check</span><span class="qs">Close everything. How many key points can you write down or explain from memory right now?</span>${opts("recall", [[0,"0"],[1,"1"],[2,"2"],[3,"3+"]], chk.recall)}</div>`;
+  h += `<div class="chq"><span class="ql">How often did you drift off or check your phone?</span>${opts("distr", [[0,"Never"],[1,"1–2×"],[2,"3–5×"],[3,"6+×"]], chk.distr)}</div>`;
+  h += `<p class="chkhead">How true was this? 1 = not at all · 7 = completely</p>`;
+  chk.order.forEach(i=>{ h += `<div class="chq"><span class="ql">${FLOW_ITEMS[i]}</span>${opts("f"+i, [1,2,3,4,5,6,7].map(n=>[n,n]), chk.flow[i], "likert")}</div>`; });
+  $("chk").innerHTML = h;
+  const sc = chkScore(chk, parts);
+  $("chkScore").hidden = sc==null; $("rateSave").disabled = sc==null;
+  if (sc!=null){ $("rateNum").textContent = sc; $("rateWord").textContent = word(sc); }
+}
+$("chk").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-ck]"); if (!b) return;
+  const k = b.dataset.ck, v = b.dataset.cv;
+  if (k==="goal") chk.goal = v; else if (k==="recall") chk.recall = +v; else if (k==="distr") chk.distr = +v; else chk.flow[+k.slice(1)] = +v;
+  const y = $("chk").parentElement.scrollTop; renderChk(); $("chk").parentElement.scrollTop = y;
+});
 function openRating(sid){
   const s = state.sessions.find(x=>x.id===sid); if (!s) return;
   ratingId = sid;
   $("rateWhat").textContent = (s.goalName||"Goal") + " · " + hm(s.ms);
-  $("rateRange").value = 50; $("rateNote").value = ""; $("rateWhen").value = s.src==="timer" ? hhmm(s.at) : ""; updateRate();
+  const order = [0,1,2,3]; for (let i=order.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [order[i],order[j]] = [order[j],order[i]]; }
+  chk = {goal:null, recall:null, distr:null, flow:[0,0,0,0], order};
+  $("rateNote").value = ""; $("rateWhen").value = s.src==="timer" ? hhmm(s.at) : "";
+  renderChk();
   $("rateScrim").hidden = false; document.body.style.overflow = "hidden";
-  $("rateRange").focus();
+  $("rateScrim").querySelector(".rate").scrollTop = 0;
 }
-function updateRate(){ const v = +$("rateRange").value; $("rateNum").textContent = v; $("rateWord").textContent = word(v); }
-$("rateRange").addEventListener("input", updateRate);
 $("rateSave").onclick = ()=>{
   const s = state.sessions.find(x=>x.id===ratingId);
-  if (s){ s.rating = +$("rateRange").value; const n = $("rateNote").value.trim(); if (n) s.note = n; const w = $("rateWhen").value; if (w) s.when = w; else delete s.when; }
+  if (s){
+    const parts = chkParts(s, state.goals[s.goalId]), sc = chkScore(chk, parts);
+    if (sc==null) return toast("Answer every question first.");
+    s.rating = sc; s.check = {v:1, goal: parts.goal ? chk.goal : null, recall: parts.recall ? chk.recall : null, distr: chk.distr, flow: chk.flow.slice()};
+    const n = $("rateNote").value.trim(); if (n) s.note = n; const w = $("rateWhen").value; if (w) s.when = w; else delete s.when;
+  }
   persist(); ratingId = null;
   $("rateScrim").hidden = true; document.body.style.overflow = "";
   toast("Saved to your journal");
@@ -1695,9 +1792,8 @@ $("list").addEventListener("click", ev=>{
   if (act==="delete-no"){ confirmDelete=null; return render(); }
   if (act==="edit") return openForm(id);
   if (act==="start"){
-    Object.keys(state.goals).forEach(k=>{ if (k!==id && state.goals[k].runningSince){ pauseGoal(state.goals[k]); toast(state.goals[k].name + " paused. Resume it any time."); } });
-    g.runningSince = Date.now(); g.sessionStart = g.runningSince; g.acc = 0; delete g.pausedAt; g.pauses = [];
-    if (isSess(g)) audioUnlock();
+    if (!isSess(g)){ askSessionGoal(id); return; }
+    startGoal(id, "");
   } else if (act==="pause"){
     pauseGoal(g);
   } else if (act==="resume"){
