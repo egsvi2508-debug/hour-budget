@@ -254,6 +254,27 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:
 .chq .likert button{font-family:var(--mono);min-width:0}
 .chq .ends{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
 .chkhead{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 -4px}
+.mini{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:10px}
+.mini-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mi{display:flex;align-items:center;gap:10px;min-height:40px;border-radius:10px;padding:0 6px;margin:0 -6px}
+.mi.sel{background:var(--accent-soft)}
+.mi .mcheck{flex:none;width:22px;height:22px;min-height:0;padding:0;border-radius:7px;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:13px;line-height:1;background:transparent}
+.mi.done .mcheck{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mi .mtext{flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 0;min-height:0;font-size:15px;line-height:1.3;overflow-wrap:anywhere;color:var(--ink)}
+.mi.sel .mtext{font-weight:600}
+.mi.sel .mtext::before{content:"▶ ";color:var(--accent);font-size:11px}
+.mi.done .mtext{text-decoration:line-through;color:var(--muted)}
+.mi .mtime{flex:none;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mi .mdel{flex:none;border:0;background:none;min-height:0;padding:0 4px;color:var(--muted);font-size:18px}
+.madd{display:flex;gap:6px}
+.madd input{flex:1;min-width:0;min-height:38px}
+.madd button{min-height:38px;padding:4px 12px}
+.mdone summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}
+.sgm-head{font-size:13px;color:var(--muted)}
+.sgm{display:flex;flex-wrap:wrap;gap:6px}
+.sgm button{min-height:36px;padding:6px 12px;border-radius:99px;font-size:14px;text-align:left}
+.sgm button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 .sbreak{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 /* journal */
 .days{display:flex;flex-direction:column;gap:8px}
@@ -601,6 +622,7 @@ details.sitem summary .sval{white-space:nowrap}
   <section class="rate" role="dialog" aria-modal="true" aria-labelledby="sgTitle">
     <h2 id="sgTitle">What exactly will you get done?</h2>
     <p class="what" id="sgWhat"></p>
+    <div id="sgMinis"></div>
     <input id="sgText" maxlength="160" placeholder="e.g. Exercises 1.2 #3–6, or bars 1–24 hands together at 80" autocomplete="off" enterkeyhint="go">
     <p class="note" style="margin:0">A concrete goal makes the check afterwards a fact, not a feeling.</p>
     <button type="button" class="primary" id="sgStart">Start</button>
@@ -1408,7 +1430,7 @@ function sessHTML(s){
     return `<li><details class="sitem" data-sess="${s.id}"${openSess.has(s.id)?" open":""}>
       <summary><span class="sname">${label}</span><span class="sval">${s.ms<0?"":"+"}${hm(s.ms)} ${chip(s.rating)}</span></summary>
       <div class="sbody">
-        ${s.goalText?`<div class="swhen">Goal: ${esc(s.goalText)}</div>`:""}
+        ${s.goalText?`<div class="swhen">${s.minis ? "Worked on" : "Goal"}: ${esc(s.goalText)}</div>`:""}
         ${s.check?`<div class="sbreak">${chkBreak(s.check)}</div>`:""}
         ${s.when?`<div class="swhen">Around ${whenLabel(s.when)}</div>`:""}
         ${s.note?`<div class="sn">${esc(s.note)}</div>`:""}
@@ -1491,6 +1513,38 @@ function msHTML(g){
   return `<ol class="ms"><li class="ms-head" style="min-height:0">Milestones · ${reached.length}/${ms.length}</li>${rows}</ol>`;
 }
 
+/* ---------- mini goals: a to-do list inside a goal; time of each session is shared among the minis you picked ---------- */
+function openMinis(g){ return (g.minis||[]).filter(m=>!m.doneAt); }
+function miniTime(g, mid){
+  let t = 0;
+  state.sessions.forEach(x=>{ if (x.goalId===g.id && x.ms>0 && x.minis && x.minis.includes(mid)) t += x.ms / x.minis.length; });
+  if ((g.runningSince || g.pausedAt) && (g.focus||[]).includes(mid)) t += elapsed(g) / g.focus.length;
+  return t;
+}
+function miniHTML(g){
+  const minis = g.minis || [], open = minis.filter(m=>!m.doneAt), done = minis.filter(m=>m.doneAt).sort((a,b)=>b.doneAt-a.doneAt);
+  const edit = openPanel===g.id, active = !!(g.runningSince || g.pausedAt), focus = g.focus || [];
+  if (!minis.length && !edit) return "";
+  const row = m => `<li class="mi${focus.includes(m.id) && !m.doneAt ? " sel" : ""}${m.doneAt ? " done" : ""}">
+      <button type="button" class="mcheck" data-mdone="${g.id}|${m.id}" aria-label="${m.doneAt ? "Mark as open" : "Mark as done"}">${m.doneAt ? "✓" : ""}</button>
+      <button type="button" class="mtext" data-msel="${g.id}|${m.id}"${m.doneAt ? " disabled" : ""}>${esc(m.text)}</button>
+      <span class="mtime">${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
+      ${edit ? `<button type="button" class="mdel" data-mdel="${g.id}|${m.id}" aria-label="Delete">×</button>` : ""}</li>`;
+  return `<div class="mini">
+    <div class="mini-head"><span class="eyebrow">Mini goals</span><span class="note">${open.length} open${focus.length ? " · " + focus.length + " " + (active ? "in this session" : "picked") : ""}</span></div>
+    ${open.length ? `<ul class="mlist">${open.map(row).join("")}</ul>` : ""}
+    ${!open.length && minis.length ? `<p class="note" style="margin:0">All done. Add the next ones after your next lesson.</p>` : ""}
+    <div class="madd"><input data-maddin="${g.id}" maxlength="120" placeholder="+ Add a mini goal" autocomplete="off" enterkeyhint="done"><button type="button" class="ghost" data-madd="${g.id}">Add</button></div>
+    ${done.length ? `<details class="mdone"><summary>Done (${done.length})</summary><ul class="mlist">${done.map(row).join("")}</ul></details>` : ""}
+  </div>`;
+}
+function addMini(gid){
+  const g = state.goals[gid], inp = document.querySelector(`[data-maddin="${gid}"]`); if (!g || !inp) return;
+  const t = inp.value.replace(/\s+/g," ").trim(); if (!t) return toast("Type the mini goal first.");
+  g.minis = g.minis || []; g.minis.push({id:newId("m"), text:t, createdAt:Date.now()});
+  persist(); render(); const n = document.querySelector(`[data-maddin="${gid}"]`); if (n) n.focus();
+}
+
 function cardHTML(g){
   const done = doneNow(g), target = g.targetH ? g.targetH*H : 0, down = g.mode==="down", isRun = !!g.runningSince, isPaused = !!g.pausedAt;
   let big, sub, pct = null, finished = false;
@@ -1530,6 +1584,7 @@ function cardHTML(g){
     <div class="meta">${paceTxt?`<span class="pace${late?" late":""}">${paceTxt}</span>`:`<span></span>`}${isRun||isPaused?`<span class="live${isPaused?" paused":""}" data-live="${g.id}">${runLabel(g)}</span>`:""}</div>
     ${(isRun||isPaused) && g.sessGoal ? `<div class="note" style="margin:-4px 0 0">Goal: ${esc(g.sessGoal)}</div>` : ""}
     ${msHTML(g)}
+    ${miniHTML(g)}
     <div class="actions">
       ${isRun||isPaused?`<button type="button" class="primary stop" data-act="stop" style="min-width:0">Stop</button><button type="button" data-act="${isPaused?"resume":"pause"}">${isPaused?"Resume":"Pause"}</button>`:`<button type="button" class="primary" data-act="start">${sess ? "Start session · " + g.sessMin + " min" : "Start timer"}</button>`}
       <button type="button" data-act="toggle" aria-expanded="${open}">${open?"Close":"Log / edit"}</button>
@@ -1555,7 +1610,7 @@ setInterval(()=>{
   if (!$("runRow").hidden) $("runText").textContent = r.name + " · " + t;
   if (r.folderId){ const fe = document.querySelector(`[data-frun="${r.folderId}"]`); if (fe) fe.textContent = r.name + " · " + t; }
   document.title = t + " · " + r.name;
-  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !blkEdit && $("sgScrim").hidden && route.view!=="failures" && route.view!=="formulas" && route.view!=="predictions" && route.view!=="meditation" && $("rateScrim").hidden) render();
+  if (Math.floor(Date.now()/1000)%30===0 && !openPanel && $("form").hidden && $("entryEdit").hidden && !editingDay && !editingSession && !confirmDay && !t3Editing && document.activeElement!==$("gratInput") && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.maddin) && !blkEdit && $("sgScrim").hidden && route.view!=="failures" && route.view!=="formulas" && route.view!=="predictions" && route.view!=="meditation" && $("rateScrim").hidden) render();
 },1000);
 /* new day at midnight: date, greeting and "3 things" roll over; yesterday's stay saved in the journal */
 let shownDay = dayKey(Date.now());
@@ -1598,12 +1653,13 @@ function stopGoal(id){
   const full = isSess(g) && ms >= sessLen(g) - 1000;
   if (isSess(g)) ms = Math.min(ms, sessLen(g));
   g.doneMs = (g.doneMs||0)+ms; g.runningSince = null;
-  const pauses = (g.pauses || []).slice(), goalText = g.sessGoal || "";
+  const minis = (g.focus||[]).filter(m=>(g.minis||[]).some(x=>x.id===m));
+  const pauses = (g.pauses || []).slice(), goalText = g.sessGoal || (minis.length ? minis.map(m=>g.minis.find(x=>x.id===m).text).join(" · ") : "");
   delete g.acc; delete g.pausedAt; delete g.sessionStart; delete g.pauses; delete g.sessGoal;
   const end = Math.min(Date.now(), start + elapsed0);
-  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; if (pauses.length) s.pauses = pauses; return s; }
+  if (full){ g.doneN = (g.doneN||0) + 1; const s = addSession(g, id, ms, "timer", start); s.n = 1; s.end = end; if (pauses.length) s.pauses = pauses; if (minis.length) s.minis = minis; return s; }
   if (ms < 60000) return 0;
-  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end; if (pauses.length) s.pauses = pauses; if (goalText) s.goalText = goalText;
+  const s = addSession(g, id, ms, "timer", start); if (isSess(g)) s.n = 0; s.end = end; if (pauses.length) s.pauses = pauses; if (goalText) s.goalText = goalText; if (minis.length) s.minis = minis;
   return s;
 }
 function startGoal(id, goalText){
@@ -1615,9 +1671,20 @@ function startGoal(id, goalText){
 }
 let sgFor = null;
 function askSessionGoal(id){
-  sgFor = id; $("sgWhat").textContent = state.goals[id].name; $("sgText").value = "";
-  $("sgScrim").hidden = false; document.body.style.overflow = "hidden"; $("sgText").focus();
+  const g = state.goals[id];
+  sgFor = id; $("sgWhat").textContent = g.name; $("sgText").value = "";
+  const open = openMinis(g);
+  g.focus = (g.focus||[]).filter(m=>open.some(x=>x.id===m));
+  $("sgMinis").innerHTML = open.length ? `<div class="sgm-head">Which mini goals are you working on?</div><div class="sgm">${open.map(m=>`<button type="button" data-sgm="${m.id}" aria-pressed="${g.focus.includes(m.id)}">${esc(m.text)}</button>`).join("")}</div>` : "";
+  $("sgText").placeholder = open.length ? "Anything more specific? (optional)" : "e.g. Exercises 1.2 #3–6, or bars 1–24 hands together at 80";
+  $("sgScrim").hidden = false; document.body.style.overflow = "hidden"; if (!open.length) $("sgText").focus();
 }
+$("sgMinis").addEventListener("click", ev=>{
+  const b = ev.target.closest("[data-sgm]"); if (!b || !sgFor) return;
+  const g = state.goals[sgFor], id = b.dataset.sgm, on = b.getAttribute("aria-pressed")!=="true";
+  g.focus = (g.focus||[]).filter(x=>x!==id); if (on) g.focus.push(id);
+  b.setAttribute("aria-pressed", on);
+});
 function closeSg(goal){
   const id = sgFor; sgFor = null; $("sgScrim").hidden = true; document.body.style.overflow = "";
   if (!id || !state.goals[id]) return;
@@ -1739,6 +1806,7 @@ $("rateSave").onclick = ()=>{
 };
 
 /* ---------- goal actions ---------- */
+$("list").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && ev.target.dataset && ev.target.dataset.maddin){ ev.preventDefault(); addMini(ev.target.dataset.maddin); } });
 $("list").addEventListener("click", ev=>{
   const fb = ev.target.closest("button[data-folder]");
   if (fb){ go("f-" + fb.dataset.folder); return; }
@@ -1761,6 +1829,24 @@ $("list").addEventListener("click", ev=>{
       persist(); toast("Session updated");
     }
     editingSession = null; return render();
+  }
+  if ((b = pick("[data-madd]"))){ addMini(b.dataset.madd); return; }
+  if ((b = pick("[data-msel]"))){
+    const [gid, mid] = b.dataset.msel.split("|"), g = state.goals[gid]; if (!g) return;
+    const was = (g.focus||[]).includes(mid);
+    if ((g.runningSince || g.pausedAt) && was && g.focus.length===1) return toast("Pick another one first. A session needs at least one, or none from the start.");
+    g.focus = (g.focus||[]).filter(x=>x!==mid); if (!was) g.focus.push(mid);
+    persist(); return render();
+  }
+  if ((b = pick("[data-mdone]"))){
+    const [gid, mid] = b.dataset.mdone.split("|"), g = state.goals[gid], m = g && (g.minis||[]).find(x=>x.id===mid); if (!m) return;
+    if (m.doneAt) delete m.doneAt; else { m.doneAt = Date.now(); if (!(g.runningSince || g.pausedAt)) g.focus = (g.focus||[]).filter(x=>x!==mid); const mt = miniTime(g, mid); toast("“" + m.text + "” done" + (mt >= 60000 ? " · " + hm(mt).replace(/^0h /,"") + " on it" : "")); }
+    persist(); return render();
+  }
+  if ((b = pick("[data-mdel]"))){
+    const [gid, mid] = b.dataset.mdel.split("|"), g = state.goals[gid]; if (!g) return;
+    g.minis = (g.minis||[]).filter(x=>x.id!==mid); g.focus = (g.focus||[]).filter(x=>x!==mid);
+    persist(); toast("Mini goal deleted"); return render();
   }
   if ((b = pick("[data-ms]"))){
     const [gid, mid] = b.dataset.ms.split("|"), g = state.goals[gid], m = g && (g.milestones||[]).find(x=>x.id===mid);
