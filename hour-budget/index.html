@@ -672,6 +672,7 @@ function load(){
   let s;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || !s.goals) return blank();
+  Object.values(s.goals || {}).forEach(g=>{ if (g.minis && g.minis.some(m=>m.doneAt)){ g.minis = g.minis.filter(m=>!m.doneAt); g.focus = (g.focus||[]).filter(id=>g.minis.some(m=>m.id===id)); } });
   s.folders = s.folders || {}; s.sessions = s.sessions || []; s.days = s.days || {}; s.settings = s.settings || {}; s.failures = s.failures || []; s.formulas = s.formulas || []; s.predictions = s.predictions || []; s.predReviews = s.predReviews || [];
   // hour-by-hour entries become time blocks
   Object.values(s.days).forEach(d=>{
@@ -1519,6 +1520,7 @@ function msHTML(g){
 }
 
 /* ---------- mini goals: a to-do list inside a goal; time of each session is shared among the minis you picked ---------- */
+let mDelAsk = null;
 function repToday(m){ const k = dayKey(Date.now()); return (m.repLog||[]).some(t=>dayKey(t)===k); }
 function openMinis(g){ return (g.minis||[]).filter(m=>!m.doneAt); }
 function miniTime(g, mid){
@@ -1537,14 +1539,13 @@ function miniHTML(g){
         : `<button type="button" class="mcheck${repToday(m) ? " today" : ""}" data-mrep="${g.id}|${m.id}" aria-label="Practised it once more">${repToday(m) ? "✓" : ""}</button>`}
       <button type="button" class="mtext" data-msel="${g.id}|${m.id}"${m.doneAt ? " disabled" : ""}>${esc(m.text)}</button>
       <span class="mtime">${m.reps ? `<b>${m.reps}×</b>` : ""}${m.reps && miniTime(g, m.id) >= 60000 ? " · " : ""}${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
-      ${edit ? `<span class="medit">` : ""}${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>${m.reps ? `<button type="button" class="mmv" data-munrep="${g.id}|${m.id}" aria-label="Remove one practice">−1</button>` : ""}<button type="button" class="mmv mfin" data-march="${g.id}|${m.id}" aria-label="Finished, move to Done">Done</button>` : ""}
-      ${edit ? `<button type="button" class="mdel" data-mdel="${g.id}|${m.id}" aria-label="Delete">×</button></span>` : ""}</li>`;
+      ${edit ? `<span class="medit">` : ""}${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>${m.reps ? `<button type="button" class="mmv" data-munrep="${g.id}|${m.id}" aria-label="Remove one practice">−1</button>` : ""}` : ""}
+      ${edit ? `${mDelAsk===m.id ? `<button type="button" class="mmv" style="color:var(--danger);border-color:var(--danger);padding:0 8px" data-mdel="${g.id}|${m.id}">Delete?</button>` : `<button type="button" class="mdel" data-mdelask="${m.id}" aria-label="Delete">×</button>`}</span>` : ""}</li>`;
   return `<div class="mini">
     <div class="mini-head"><span class="eyebrow">Mini goals</span><span class="note">${open.length} open${focus.length ? " · " + focus.length + " " + (active ? "in this session" : "picked") : ""}</span></div>
     ${open.length ? `<ul class="mlist">${open.map(row).join("")}</ul>` : ""}
     ${!open.length && minis.length ? `<p class="note" style="margin:0">All done. Add the next ones after your next lesson.</p>` : ""}
     <div class="madd"><input data-maddin="${g.id}" maxlength="120" placeholder="+ Add a mini goal" autocomplete="off" enterkeyhint="done"><button type="button" class="ghost" data-madd="${g.id}">Add</button></div>
-    ${done.length ? `<details class="mdone"><summary>Done (${done.length})</summary><ul class="mlist">${done.map(row).join("")}</ul></details>` : ""}
   </div>`;
 }
 function addMini(gid){
@@ -1864,7 +1865,9 @@ $("list").addEventListener("click", ev=>{
     g.minis = open.concat(g.minis.filter(m=>m.doneAt));
     persist(); return render();
   }
+  if ((b = pick("[data-mdelask]"))){ mDelAsk = b.dataset.mdelask; return render(); }
   if ((b = pick("[data-mdel]"))){
+    mDelAsk = null;
     const [gid, mid] = b.dataset.mdel.split("|"), g = state.goals[gid]; if (!g) return;
     g.minis = (g.minis||[]).filter(x=>x.id!==mid); g.focus = (g.focus||[]).filter(x=>x!==mid);
     persist(); toast("Mini goal deleted"); return render();
