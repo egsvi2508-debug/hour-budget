@@ -1538,7 +1538,7 @@ function miniHTML(g){
         ? `<button type="button" class="mcheck" data-munarch="${g.id}|${m.id}" aria-label="Back to the open list">✓</button>`
         : `<button type="button" class="mcheck${repToday(m) ? " today" : ""}" data-mrep="${g.id}|${m.id}" aria-label="Practised it once more">${repToday(m) ? "✓" : ""}</button>`}
       <button type="button" class="mtext" data-msel="${g.id}|${m.id}"${m.doneAt ? " disabled" : ""}>${esc(m.text)}</button>
-      <span class="mtime">${m.reps ? `<b>${m.reps}×</b>` : ""}${m.reps && miniTime(g, m.id) >= 60000 ? " · " : ""}${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
+      <span class="mtime">${m.reps ? `<b>${m.reps}×</b>${m.repLog && m.repLog.length ? " since " + new Date(m.repLog[0]).toLocaleDateString(undefined,{day:"numeric",month:"short"}) : ""}` : ""}${m.reps && miniTime(g, m.id) >= 60000 ? " · " : ""}${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
       ${edit ? `<span class="medit">` : ""}${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>${m.reps ? `<button type="button" class="mmv" data-munrep="${g.id}|${m.id}" aria-label="Remove one practice">−1</button>` : ""}` : ""}
       ${edit ? `${mDelAsk===m.id ? `<button type="button" class="mmv" style="color:var(--danger);border-color:var(--danger);padding:0 8px" data-mdel="${g.id}|${m.id}">Delete?</button>` : `<button type="button" class="mdel" data-mdelask="${m.id}" aria-label="Delete">×</button>`}</span>` : ""}</li>`;
   return `<div class="mini">
