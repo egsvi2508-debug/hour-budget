@@ -257,15 +257,19 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:
 .mini{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:10px}
 .mini-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.mi{display:flex;align-items:center;gap:10px;min-height:40px;border-radius:10px;padding:0 6px;margin:0 -6px}
+.mi{display:flex;flex-wrap:wrap;align-items:center;gap:0 10px;min-height:40px;border-radius:10px;padding:0 6px;margin:0 -6px}
 .mi.sel{background:var(--accent-soft)}
 .mi .mcheck{flex:none;width:22px;height:22px;min-height:0;padding:0;border-radius:7px;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:13px;line-height:1;background:transparent}
+.mi .mcheck.today{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.mi .mtime b{font-weight:600;color:var(--ink)}
+.mi .mfin{font-size:12px;padding:0 8px;color:var(--accent);border-color:var(--accent)}
 .mi.done .mcheck{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .mi .mtext{flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 0;min-height:0;font-size:15px;line-height:1.3;overflow-wrap:anywhere;color:var(--ink)}
 .mi.sel .mtext{font-weight:600}
 .mi.sel .mtext::before{content:"▶ ";color:var(--accent);font-size:11px}
 .mi.done .mtext{text-decoration:line-through;color:var(--muted)}
 .mi .mtime{flex:none;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mi .medit{flex-basis:100%;display:flex;gap:6px;justify-content:flex-end;align-items:center;padding:0 0 8px 32px}
 .mi .mmv{flex:none;border:1px solid var(--line);background:none;min-height:30px;min-width:30px;padding:0;border-radius:8px;color:var(--muted);font-size:15px}
 .mi .mdel{flex:none;border:0;background:none;min-height:0;padding:0 4px;color:var(--muted);font-size:18px}
 .madd{display:flex;gap:6px}
@@ -1515,6 +1519,7 @@ function msHTML(g){
 }
 
 /* ---------- mini goals: a to-do list inside a goal; time of each session is shared among the minis you picked ---------- */
+function repToday(m){ const k = dayKey(Date.now()); return (m.repLog||[]).some(t=>dayKey(t)===k); }
 function openMinis(g){ return (g.minis||[]).filter(m=>!m.doneAt); }
 function miniTime(g, mid){
   let t = 0;
@@ -1527,11 +1532,13 @@ function miniHTML(g){
   const edit = openPanel===g.id, active = !!(g.runningSince || g.pausedAt), focus = g.focus || [];
   if (!minis.length && !edit) return "";
   const row = m => `<li class="mi${focus.includes(m.id) && !m.doneAt ? " sel" : ""}${m.doneAt ? " done" : ""}">
-      <button type="button" class="mcheck" data-mdone="${g.id}|${m.id}" aria-label="${m.doneAt ? "Mark as open" : "Mark as done"}">${m.doneAt ? "✓" : ""}</button>
+      ${m.doneAt
+        ? `<button type="button" class="mcheck" data-munarch="${g.id}|${m.id}" aria-label="Back to the open list">✓</button>`
+        : `<button type="button" class="mcheck${repToday(m) ? " today" : ""}" data-mrep="${g.id}|${m.id}" aria-label="Practised it once more">${repToday(m) ? "✓" : ""}</button>`}
       <button type="button" class="mtext" data-msel="${g.id}|${m.id}"${m.doneAt ? " disabled" : ""}>${esc(m.text)}</button>
-      <span class="mtime">${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
-      ${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>` : ""}
-      ${edit ? `<button type="button" class="mdel" data-mdel="${g.id}|${m.id}" aria-label="Delete">×</button>` : ""}</li>`;
+      <span class="mtime">${m.reps ? `<b>${m.reps}×</b>` : ""}${m.reps && miniTime(g, m.id) >= 60000 ? " · " : ""}${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
+      ${edit ? `<span class="medit">` : ""}${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>${m.reps ? `<button type="button" class="mmv" data-munrep="${g.id}|${m.id}" aria-label="Remove one practice">−1</button>` : ""}<button type="button" class="mmv mfin" data-march="${g.id}|${m.id}" aria-label="Finished, move to Done">Done</button>` : ""}
+      ${edit ? `<button type="button" class="mdel" data-mdel="${g.id}|${m.id}" aria-label="Delete">×</button></span>` : ""}</li>`;
   return `<div class="mini">
     <div class="mini-head"><span class="eyebrow">Mini goals</span><span class="note">${open.length} open${focus.length ? " · " + focus.length + " " + (active ? "in this session" : "picked") : ""}</span></div>
     ${open.length ? `<ul class="mlist">${open.map(row).join("")}</ul>` : ""}
@@ -1840,9 +1847,13 @@ $("list").addEventListener("click", ev=>{
     g.focus = (g.focus||[]).filter(x=>x!==mid); if (!was) g.focus.push(mid);
     persist(); return render();
   }
-  if ((b = pick("[data-mdone]"))){
-    const [gid, mid] = b.dataset.mdone.split("|"), g = state.goals[gid], m = g && (g.minis||[]).find(x=>x.id===mid); if (!m) return;
-    if (m.doneAt) delete m.doneAt; else { m.doneAt = Date.now(); if (!(g.runningSince || g.pausedAt)) g.focus = (g.focus||[]).filter(x=>x!==mid); const mt = miniTime(g, mid); toast("“" + m.text + "” done" + (mt >= 60000 ? " · " + hm(mt).replace(/^0h /,"") + " on it" : "")); }
+  if ((b = pick("[data-mrep],[data-munrep],[data-march],[data-munarch]"))){
+    const d = b.dataset, key = d.mrep || d.munrep || d.march || d.munarch;
+    const [gid, mid] = key.split("|"), g = state.goals[gid], m = g && (g.minis||[]).find(x=>x.id===mid); if (!m) return;
+    if (d.mrep){ m.reps = (m.reps||0) + 1; (m.repLog = m.repLog || []).push(Date.now()); toast("+1 · " + m.text + " · " + m.reps + "× practised"); }
+    else if (d.munrep){ m.reps = Math.max(0, (m.reps||0) - 1); if (m.repLog) m.repLog.pop(); toast("Removed one · " + m.reps + "×"); }
+    else if (d.march){ m.doneAt = Date.now(); if (!(g.runningSince || g.pausedAt)) g.focus = (g.focus||[]).filter(x=>x!==mid); const mt = miniTime(g, mid); toast("“" + m.text + "” finished" + (m.reps ? " · " + m.reps + "×" : "") + (mt >= 60000 ? " · " + hm(mt).replace(/^0h /,"") : "")); }
+    else if (d.munarch){ delete m.doneAt; }
     persist(); return render();
   }
   if ((b = pick("[data-mmove]"))){
