@@ -266,6 +266,7 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:36px;padding:
 .mi.sel .mtext::before{content:"▶ ";color:var(--accent);font-size:11px}
 .mi.done .mtext{text-decoration:line-through;color:var(--muted)}
 .mi .mtime{flex:none;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mi .mmv{flex:none;border:1px solid var(--line);background:none;min-height:30px;min-width:30px;padding:0;border-radius:8px;color:var(--muted);font-size:15px}
 .mi .mdel{flex:none;border:0;background:none;min-height:0;padding:0 4px;color:var(--muted);font-size:18px}
 .madd{display:flex;gap:6px}
 .madd input{flex:1;min-width:0;min-height:38px}
@@ -1529,6 +1530,7 @@ function miniHTML(g){
       <button type="button" class="mcheck" data-mdone="${g.id}|${m.id}" aria-label="${m.doneAt ? "Mark as open" : "Mark as done"}">${m.doneAt ? "✓" : ""}</button>
       <button type="button" class="mtext" data-msel="${g.id}|${m.id}"${m.doneAt ? " disabled" : ""}>${esc(m.text)}</button>
       <span class="mtime">${miniTime(g, m.id) >= 60000 ? hm(miniTime(g, m.id)).replace(/^0h /,"") : ""}</span>
+      ${edit && !m.doneAt ? `<button type="button" class="mmv" data-mmove="${g.id}|${m.id}|-1" aria-label="Move up">↑</button><button type="button" class="mmv" data-mmove="${g.id}|${m.id}|1" aria-label="Move down">↓</button>` : ""}
       ${edit ? `<button type="button" class="mdel" data-mdel="${g.id}|${m.id}" aria-label="Delete">×</button>` : ""}</li>`;
   return `<div class="mini">
     <div class="mini-head"><span class="eyebrow">Mini goals</span><span class="note">${open.length} open${focus.length ? " · " + focus.length + " " + (active ? "in this session" : "picked") : ""}</span></div>
@@ -1841,6 +1843,14 @@ $("list").addEventListener("click", ev=>{
   if ((b = pick("[data-mdone]"))){
     const [gid, mid] = b.dataset.mdone.split("|"), g = state.goals[gid], m = g && (g.minis||[]).find(x=>x.id===mid); if (!m) return;
     if (m.doneAt) delete m.doneAt; else { m.doneAt = Date.now(); if (!(g.runningSince || g.pausedAt)) g.focus = (g.focus||[]).filter(x=>x!==mid); const mt = miniTime(g, mid); toast("“" + m.text + "” done" + (mt >= 60000 ? " · " + hm(mt).replace(/^0h /,"") + " on it" : "")); }
+    persist(); return render();
+  }
+  if ((b = pick("[data-mmove]"))){
+    const [gid, mid, dir] = b.dataset.mmove.split("|"), g = state.goals[gid]; if (!g || !g.minis) return;
+    const open = g.minis.filter(m=>!m.doneAt), i = open.findIndex(m=>m.id===mid), j = i + (+dir);
+    if (i<0 || j<0 || j>=open.length) return;
+    [open[i], open[j]] = [open[j], open[i]];
+    g.minis = open.concat(g.minis.filter(m=>m.doneAt));
     persist(); return render();
   }
   if ((b = pick("[data-mdel]"))){
